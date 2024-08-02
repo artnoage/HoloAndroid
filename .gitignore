@@ -2,4 +2,4 @@ build/distributions/*.zip
 build/distributions/*.tar
 build/libs/*.jar
 .idea
-.grandle
+.gradle
