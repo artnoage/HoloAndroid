@@ -2,4 +2,5 @@
 <resources>
     <string name="process">Process</string>
     <string name="enter_text_here">Enter text here</string>
+    <string name="app_name">HoloBar</string>
 </resources>
