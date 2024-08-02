@@ -1,34 +1,43 @@
 import ai.onnxruntime.*;
+import android.content.Context;
+import android.util.Log;
+
 import java.io.*;
 import java.nio.*;
 import java.util.*;
 
 public class VitsOnnxSynthesizer implements AutoCloseable {
+    private static final String TAG = "VitsOnnxSynthesizer";
     private static final int SAMPLE_RATE = 22050;
     private final Tokenizer tokenizer;
     private final OrtEnvironment env;
     private final OrtSession session;
 
-    public VitsOnnxSynthesizer(InputStream onnxStream) throws OrtException, IOException {
-        this.tokenizer = new Tokenizer();
+    public VitsOnnxSynthesizer(Context context, String modelFileName) throws OrtException, IOException {
+        this.tokenizer = new Tokenizer(context);
         this.env = OrtEnvironment.getEnvironment();
-        byte[] modelBytes = readAllBytes(onnxStream);
+        byte[] modelBytes = readBytesFromAsset(context, modelFileName);
         this.session = env.createSession(modelBytes, new OrtSession.SessionOptions());
     }
 
-    private byte[] readAllBytes(InputStream inputStream) throws IOException {
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream();
-        int nRead;
-        byte[] data = new byte[16384];
-        while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
-            buffer.write(data, 0, nRead);
+    private byte[] readBytesFromAsset(Context context, String fileName) throws IOException {
+        try (InputStream inputStream = context.getAssets().open(fileName)) {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            int nRead;
+            byte[] data = new byte[16384];
+            while ((nRead = inputStream.read(data, 0, data.length)) != -1) {
+                buffer.write(data, 0, nRead);
+            }
+            return buffer.toByteArray();
         }
-        return buffer.toByteArray();
     }
 
     public float[] tts(String text, long speakerId) throws OrtException {
         List<Integer> inputs = tokenizer.textToIds(text);
-        long[] inputArray = inputs.stream().mapToLong(Integer::longValue).toArray();
+        long[] inputArray = new long[inputs.size()];
+        for (int i = 0; i < inputs.size(); i++) {
+            inputArray[i] = inputs.get(i).longValue();
+        }
         long[] inputLengths = new long[]{inputArray.length};
         float[] scales = new float[]{0.667f, 1.0f, 0.8f};
         long[] sid = new long[]{speakerId};
@@ -44,9 +53,10 @@ public class VitsOnnxSynthesizer implements AutoCloseable {
         ortInputs.put("scales", scalesTensor);
         ortInputs.put("sid", sidTensor);
 
-        OrtSession.Result result = session.run(ortInputs);
-        float[][][] audio = (float[][][]) result.get(0).getValue();
-        return audio[0][0];
+        try (OrtSession.Result result = session.run(ortInputs)) {
+            float[][][] audio = (float[][][]) result.get(0).getValue();
+            return audio[0][0];
+        }
     }
 
     public int getSampleRate() {
@@ -54,12 +64,16 @@ public class VitsOnnxSynthesizer implements AutoCloseable {
     }
 
     @Override
-    public void close() throws Exception {
-        if (session != null) {
-            session.close();
-        }
-        if (env != null) {
-            env.close();
+    public void close() {
+        try {
+            if (session != null) {
+                session.close();
+            }
+            if (env != null) {
+                env.close();
+            }
+        } catch (OrtException e) {
+            Log.e(TAG, "Error closing ONNX session or environment", e);
         }
     }
 }

@@ -1,5 +1,6 @@
 import org.apache.commons.lang3.tuple.ImmutablePair;
 import com.ibm.icu.text.RuleBasedNumberFormat;
+import android.content.Context;
 import java.io.IOException;
 import java.io.InputStream;
 import java.text.Normalizer;
@@ -22,8 +23,8 @@ public class Tokenizer {
     private static final Pattern NUMBER_PATTERN = Pattern.compile("\\b\\d+\\b");
     private final RuleBasedNumberFormat numberFormat;
 
-    public Tokenizer() {
-        Properties config = loadConfig();
+    public Tokenizer(Context context) {
+        Properties config = loadConfig(context);
         this.textSymbols = config.getProperty("text_symbols");
         this.lowercase = Boolean.parseBoolean(config.getProperty("lowercase"));
         this.languageCodeEn = config.getProperty("language_code_en");
@@ -36,13 +37,10 @@ public class Tokenizer {
         this.numberFormat = new RuleBasedNumberFormat(Locale.US, RuleBasedNumberFormat.SPELLOUT);
     }
 
-    private Properties loadConfig() {
+    private Properties loadConfig(Context context) {
         Properties prop = new Properties();
         String resourceName = "tokenizer_config.properties";
-        try (InputStream input = getClass().getClassLoader().getResourceAsStream(resourceName)) {
-            if (input == null) {
-                throw new TokenizerException("Unable to find " + resourceName);
-            }
+        try (InputStream input = context.getAssets().open(resourceName)) {
             prop.load(input);
         } catch (IOException ex) {
             throw new TokenizerException("Failed to load configuration", ex);

@@ -1,4 +1,5 @@
 import ai.onnxruntime.*;
+import android.content.res.AssetManager;
 import java.io.InputStream;
 import java.io.IOException;
 import java.util.*;
@@ -14,10 +15,12 @@ public class Phonemizer {
     private final String endToken;
     private final Map<String, List<Integer>> cache;
 
-    public static void initialize(InputStream modelStream) throws OrtException, IOException {
+    public static void initialize(AssetManager assetManager, String modelFileName) throws OrtException, IOException {
         env = OrtEnvironment.getEnvironment();
-        byte[] modelBytes = modelStream.readAllBytes();
-        session = env.createSession(modelBytes, new OrtSession.SessionOptions());
+        try (InputStream modelStream = assetManager.open(modelFileName)) {
+            byte[] modelBytes = modelStream.readAllBytes();
+            session = env.createSession(modelBytes, new OrtSession.SessionOptions());
+        }
     }
 
     public Phonemizer(Properties config, Map<String, Integer> tokenToIdx) {
