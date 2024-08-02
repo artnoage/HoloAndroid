@@ -44,7 +44,7 @@ public class MainActivity extends Activity {
 
         // Set up speaker spinner
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
-                R.array.speaker_array, android.R.layout.simple_spinner_item);
+        com.vaios.holobar.R.array.speaker_array, android.R.layout.simple_spinner_item);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         speakerSpinner.setAdapter(adapter);
 
