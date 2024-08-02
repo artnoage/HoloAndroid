@@ -16,6 +16,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -30,6 +31,23 @@ public class ApiCall {
         this.context = context;
         this.geminiApiKey = geminiApiKey;
         this.requestQueue = Volley.newRequestQueue(context);
+        initializeZeroHistory();
+    }
+
+    private void initializeZeroHistory() {
+        File zeroHistoryFile = new File(context.getFilesDir(), "zero_history.pickle");
+        if (!zeroHistoryFile.exists()) {
+            try (InputStream is = context.getAssets().open("zero_history.pickle");
+                 FileOutputStream fos = new FileOutputStream(zeroHistoryFile)) {
+                byte[] buffer = new byte[1024];
+                int length;
+                while ((length = is.read(buffer)) > 0) {
+                    fos.write(buffer, 0, length);
+                }
+            } catch (IOException e) {
+                Log.e(TAG, "Error initializing zero_history.pickle", e);
+            }
+        }
     }
 
     public interface ApiCallCallback {
