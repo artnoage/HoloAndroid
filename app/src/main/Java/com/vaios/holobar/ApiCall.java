@@ -1,7 +1,9 @@
 package com.vaios.holobar;
+
 import android.content.Context;
 import android.util.Log;
 
+import com.android.volley.DefaultRetryPolicy;
 import com.android.volley.NetworkResponse;
 import com.android.volley.Request;
 import com.android.volley.RequestQueue;
@@ -13,6 +15,7 @@ import com.android.volley.toolbox.Volley;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -22,11 +25,15 @@ import java.util.HashMap;
 import java.util.Map;
 
 public class ApiCall {
-    private static final String API_URL = "http://35.224.101.18:8000/talk_to_agents/";
+    private static final String API_URL = "https://fastapi.metaskepsis.com/talk_to_agents/";
     private static final String TAG = "ApiCall";
     private final String geminiApiKey;
     private final RequestQueue requestQueue;
     private final Context context;
+
+    // Timeout constants
+    private static final int MY_SOCKET_TIMEOUT_MS = 30000; // 30 seconds
+    private static final int MY_MAX_RETRIES = 2;
 
     public ApiCall(Context context, String geminiApiKey) {
         this.context = context;
@@ -45,64 +52,94 @@ public class ApiCall {
                 while ((length = is.read(buffer)) > 0) {
                     fos.write(buffer, 0, length);
                 }
+                Log.d(TAG, "Zero history file initialized: " + zeroHistoryFile.getAbsolutePath());
             } catch (IOException e) {
                 Log.e(TAG, "Error initializing zero_history.pickle", e);
             }
+        } else {
+            Log.d(TAG, "Zero history file already exists: " + zeroHistoryFile.getAbsolutePath());
         }
     }
 
     public interface ApiCallCallback {
-        void onSuccess(String narration);
+        void onSuccess(String narration, String status);
         void onError(String error);
     }
 
     public void sendAudioToApi(File audioFile, int speakerId, ApiCallCallback callback) {
+        Log.d(TAG, "Preparing to send audio to API. File: " + audioFile.getAbsolutePath() + ", Speaker ID: " + speakerId);
+
+        if (!audioFile.exists() || !audioFile.canRead()) {
+            Log.e(TAG, "Audio file does not exist or is not readable: " + audioFile.getAbsolutePath());
+            callback.onError("Audio file is not accessible");
+            return;
+        }
+        Log.d(TAG, "Audio file found and is readable: " + audioFile.getAbsolutePath());
+
+        File historyFile = new File(context.getFilesDir(), "updated_history.pickle");
+        if (!historyFile.exists() || !historyFile.canRead()) {
+            Log.d(TAG, "Updated history file not found or not readable. Attempting to use zero_history.pickle");
+            historyFile = new File(context.getFilesDir(), "zero_history.pickle");
+            if (!historyFile.exists() || !historyFile.canRead()) {
+                Log.e(TAG, "Zero history file does not exist or is not readable: " + historyFile.getAbsolutePath());
+                callback.onError("History file is not accessible");
+                return;
+            }
+        }
+        Log.d(TAG, "Using history file: " + historyFile.getName() + " from path: " + historyFile.getAbsolutePath());
+
         MultipartRequest multipartRequest = new MultipartRequest(Request.Method.POST, API_URL,
                 response -> {
                     try {
                         String responseBody = new String(response.data);
-                        Log.d(TAG, "Response body: " + responseBody);
+                        Log.d(TAG, "API Response body: " + responseBody);
                         JSONObject jsonResponse = new JSONObject(responseBody);
                         String narration = jsonResponse.getString("narration");
                         String updatedHistory = jsonResponse.getString("updated_history");
+                        String status = jsonResponse.getString("status");
                         saveUpdatedHistory(updatedHistory);
-                        callback.onSuccess(narration);
+                        Log.d(TAG, "Narration received and history updated");
+                        Log.d(TAG, "Status: " + status);
+                        callback.onSuccess(narration, status);
                     } catch (JSONException | IOException e) {
-                        Log.e(TAG, "Error processing response", e);
+                        Log.e(TAG, "Error processing response: " + Log.getStackTraceString(e));
                         callback.onError("Error processing response: " + e.getMessage());
                     }
                 },
                 error -> {
-                    Log.e(TAG, "Error in API call", error);
-                    callback.onError("API call failed: " + error.getMessage());
-                }) {
-            @Override
-            protected Map<String, String> getParams() {
-                Map<String, String> params = new HashMap<>();
-                params.put("agent_number", String.valueOf(speakerId));
-                params.put("gemini_api_key", geminiApiKey);
-                return params;
-            }
-
-            @Override
-            protected Map<String, DataPart> getByteData() {
-                Map<String, DataPart> params = new HashMap<>();
-                try {
-                    params.put("audio_file", new DataPart("audio.wav", readFileToBytes(audioFile), "audio/wav"));
-
-                    File historyFile = new File(context.getFilesDir(), "updated_history.pickle");
-                    if (!historyFile.exists()) {
-                        historyFile = new File(context.getFilesDir(), "zero_history.pickle");
+                    Log.e(TAG, "Error in API call: " + Log.getStackTraceString(error));
+                    if (error.networkResponse != null) {
+                        Log.e(TAG, "Error status code: " + error.networkResponse.statusCode);
+                        Log.e(TAG, "Error body: " + new String(error.networkResponse.data));
                     }
-                    params.put("history_file", new DataPart(historyFile.getName(), readFileToBytes(historyFile), "application/octet-stream"));
-                } catch (IOException e) {
-                    Log.e(TAG, "Error reading files", e);
-                }
-                return params;
-            }
-        };
+                    String errorMessage = "API call failed: ";
+                    if (error instanceof com.android.volley.TimeoutError) {
+                        errorMessage += "Request timed out. Please check your internet connection and try again.";
+                    } else if (error instanceof com.android.volley.NoConnectionError) {
+                        errorMessage += "No internet connection. Please check your network settings and try again.";
+                    } else if (error instanceof com.android.volley.AuthFailureError) {
+                        errorMessage += "Authentication failure. Please check your API key and try again.";
+                    } else if (error instanceof com.android.volley.ServerError) {
+                        errorMessage += "Server error. Please try again later.";
+                    } else {
+                        errorMessage += error.getMessage();
+                    }
+                    callback.onError(errorMessage);
+                });
+
+        multipartRequest.addStringPart("agent_number", String.valueOf(speakerId));
+        multipartRequest.addStringPart("gemini_api_key", geminiApiKey);
+        multipartRequest.addFilePart("audio_file", audioFile);
+        multipartRequest.addFilePart("history_file", historyFile);
+
+        // Set a custom retry policy
+        multipartRequest.setRetryPolicy(new DefaultRetryPolicy(
+                MY_SOCKET_TIMEOUT_MS,
+                MY_MAX_RETRIES,
+                DefaultRetryPolicy.DEFAULT_BACKOFF_MULT));
 
         requestQueue.add(multipartRequest);
+        Log.d(TAG, "Request added to queue with custom timeout and retry policy");
     }
 
     private void saveUpdatedHistory(String updatedHistory) throws IOException {
@@ -113,43 +150,73 @@ public class ApiCall {
         Log.d(TAG, "Updated history saved to: " + historyFile.getAbsolutePath());
     }
 
-    private byte[] readFileToBytes(File file) throws IOException {
-        byte[] bytes = new byte[(int) file.length()];
-        try (FileInputStream fis = new FileInputStream(file)) {
-            fis.read(bytes);
-        }
-        return bytes;
-    }
-
-    public class MultipartRequest extends Request<NetworkResponse> {
+    private static class MultipartRequest extends Request<NetworkResponse> {
         private final Response.Listener<NetworkResponse> mListener;
-        private final Response.ErrorListener mErrorListener;
-        private final Map<String, String> mStringParts;
-        private final Map<String, DataPart> mDataParts;
+        private final Map<String, String> mStringParts = new HashMap<>();
+        private final Map<String, File> mFileParts = new HashMap<>();
+        private final String boundary = "apicall" + System.currentTimeMillis();
 
         public MultipartRequest(int method, String url,
                                 Response.Listener<NetworkResponse> listener,
                                 Response.ErrorListener errorListener) {
             super(method, url, errorListener);
             this.mListener = listener;
-            this.mErrorListener = errorListener;
-            this.mStringParts = new HashMap<>();
-            this.mDataParts = new HashMap<>();
+        }
+
+        public void addStringPart(String name, String value) {
+            mStringParts.put(name, value);
+        }
+
+        public void addFilePart(String name, File file) {
+            mFileParts.put(name, file);
         }
 
         @Override
-        protected Map<String, String> getParams() {
-            return mStringParts;
-        }
-
-
-        protected Map<String, DataPart> getByteData() {
-            return mDataParts;
+        public String getBodyContentType() {
+            return "multipart/form-data;boundary=" + boundary;
         }
 
         @Override
-        protected void deliverResponse(NetworkResponse response) {
-            mListener.onResponse(response);
+        public byte[] getBody() {
+            ByteArrayOutputStream bos = new ByteArrayOutputStream();
+            try {
+                // Add string params
+                for (Map.Entry<String, String> entry : mStringParts.entrySet()) {
+                    buildTextPart(bos, entry.getKey(), entry.getValue());
+                }
+
+                // Add file params
+                for (Map.Entry<String, File> entry : mFileParts.entrySet()) {
+                    buildFilePart(bos, entry.getKey(), entry.getValue());
+                }
+
+                // End of multipart/form-data
+                bos.write(("--" + boundary + "--\r\n").getBytes());
+            } catch (IOException e) {
+                Log.e(TAG, "Error creating multipart request body: " + Log.getStackTraceString(e));
+            }
+            return bos.toByteArray();
+        }
+
+        private void buildTextPart(ByteArrayOutputStream bos, String parameterName, String parameterValue) throws IOException {
+            bos.write(("--" + boundary + "\r\n").getBytes());
+            bos.write(("Content-Disposition: form-data; name=\"" + parameterName + "\"\r\n\r\n").getBytes());
+            bos.write((parameterValue + "\r\n").getBytes());
+        }
+
+        private void buildFilePart(ByteArrayOutputStream bos, String parameterName, File file) throws IOException {
+            bos.write(("--" + boundary + "\r\n").getBytes());
+            bos.write(("Content-Disposition: form-data; name=\"" + parameterName + "\"; filename=\"" + file.getName() + "\"\r\n").getBytes());
+            bos.write(("Content-Type: application/octet-stream\r\n\r\n").getBytes());
+
+            FileInputStream fileInputStream = new FileInputStream(file);
+            byte[] buffer = new byte[1024];
+            int bytesRead;
+            while ((bytesRead = fileInputStream.read(buffer)) != -1) {
+                bos.write(buffer, 0, bytesRead);
+            }
+            bos.write("\r\n".getBytes());
+            fileInputStream.close();
         }
 
         @Override
@@ -158,32 +225,8 @@ public class ApiCall {
         }
 
         @Override
-        public void deliverError(VolleyError error) {
-            mErrorListener.onErrorResponse(error);
-        }
-    }
-
-    public class DataPart {
-        private String fileName;
-        private byte[] content;
-        private String type;
-
-        public DataPart(String name, byte[] data, String mimeType) {
-            fileName = name;
-            content = data;
-            type = mimeType;
-        }
-
-        public String getFileName() {
-            return fileName;
-        }
-
-        public byte[] getContent() {
-            return content;
-        }
-
-        public String getType() {
-            return type;
+        protected void deliverResponse(NetworkResponse response) {
+            mListener.onResponse(response);
         }
     }
 }
