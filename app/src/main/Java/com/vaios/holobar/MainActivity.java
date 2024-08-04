@@ -1,16 +1,21 @@
 package com.vaios.holobar;
 
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.media.AudioAttributes;
 import android.media.AudioFormat;
-import android.media.AudioRecord;
 import android.media.AudioTrack;
-import android.media.MediaRecorder;
 import android.os.Bundle;
+import android.speech.RecognitionListener;
+import android.speech.RecognizerIntent;
+import android.speech.SpeechRecognizer;
 import android.util.Log;
+import android.view.View;
+import android.widget.AdapterView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
+import android.widget.ImageView;
 import android.widget.Spinner;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -18,21 +23,19 @@ import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 import android.Manifest;
 import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.Locale;
 
 public class MainActivity extends Activity {
     private static final String TAG = "MainActivity";
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     private static final int SAMPLE_RATE = 22050;
 
-    private AudioToAudio audioToAudio;
+    private TextToAudio audioToAudio;
     private Spinner speakerSpinner;
     private Button recordButton;
-    private boolean isRecording = false;
-    private AudioRecord audioRecord;
-    private final List<Short> recordedData = new ArrayList<>();
+    private ImageView backgroundImage;
+    private SpeechRecognizer speechRecognizer;
+    private boolean isListening = false;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -43,6 +46,7 @@ public class MainActivity extends Activity {
 
         speakerSpinner = findViewById(R.id.speaker_spinner);
         recordButton = findViewById(R.id.record_button);
+        backgroundImage = findViewById(R.id.background_image);
 
         // Set up speaker spinner
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
@@ -50,8 +54,20 @@ public class MainActivity extends Activity {
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         speakerSpinner.setAdapter(adapter);
 
+        speakerSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                updateBackgroundImage(position);
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                // Do nothing
+            }
+        });
+
         try {
-            audioToAudio = new AudioToAudio(this);
+            audioToAudio = new TextToAudio(this);
         } catch (RuntimeException e) {
             Toast.makeText(this, e.getMessage(), Toast.LENGTH_LONG).show();
             finish();
@@ -59,15 +75,92 @@ public class MainActivity extends Activity {
         }
 
         recordButton.setOnClickListener(v -> {
-            if (isRecording) {
-                stopRecording();
-                processRecordedAudio();
+            if (checkPermission()) {
+                toggleListening();
             } else {
-                if (checkPermission()) {
-                    startRecording();
-                } else {
-                    requestPermission();
+                requestPermission();
+            }
+        });
+
+        initializeSpeechRecognizer();
+    }
+
+    private void initializeSpeechRecognizer() {
+        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this);
+        speechRecognizer.setRecognitionListener(new RecognitionListener() {
+            @Override
+            public void onResults(Bundle results) {
+                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                if (matches != null && !matches.isEmpty()) {
+                    String recognizedText = matches.get(0);
+                    processRecognizedText(recognizedText);
                 }
+            }
+
+            @Override
+            public void onReadyForSpeech(Bundle params) {}
+
+            @Override
+            public void onBeginningOfSpeech() {}
+
+            @Override
+            public void onRmsChanged(float rmsdB) {}
+
+            @Override
+            public void onBufferReceived(byte[] buffer) {}
+
+            @Override
+            public void onEndOfSpeech() {
+                isListening = false;
+                updateRecordButtonUI();
+            }
+
+            @Override
+            public void onError(int error) {
+                isListening = false;
+                updateRecordButtonUI();
+                Toast.makeText(MainActivity.this, "Error in speech recognition: " + error, Toast.LENGTH_SHORT).show();
+            }
+
+            @Override
+            public void onPartialResults(Bundle partialResults) {}
+
+            @Override
+            public void onEvent(int eventType, Bundle params) {}
+        });
+    }
+
+    private void toggleListening() {
+        if (!isListening) {
+            startListening();
+        } else {
+            stopListening();
+        }
+    }
+
+    private void startListening() {
+        Intent intent = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault());
+        speechRecognizer.startListening(intent);
+        isListening = true;
+        updateRecordButtonUI();
+    }
+
+    private void stopListening() {
+        speechRecognizer.stopListening();
+        isListening = false;
+        updateRecordButtonUI();
+    }
+
+    private void updateRecordButtonUI() {
+        runOnUiThread(() -> {
+            if (isListening) {
+                recordButton.setText("Stop Listening");
+                // You can also change the button's appearance here
+            } else {
+                recordButton.setText("Start Listening");
+                // Reset the button's appearance
             }
         });
     }
@@ -80,99 +173,26 @@ public class MainActivity extends Activity {
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_RECORD_AUDIO_PERMISSION);
     }
 
-    private void startRecording() {
-        if (!checkPermission()) {
-            Log.w(TAG, "Attempted to start recording without permission");
-            Toast.makeText(this, "Record audio permission is required", Toast.LENGTH_SHORT).show();
-            return;
-        }
-
-        Log.d(TAG, "Starting audio recording");
-        recordedData.clear();
-        int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
-
-        audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
-
-        audioRecord.startRecording();
-        isRecording = true;
-        recordButton.setText("Stop Recording");
-
-        new Thread(() -> {
-            short[] buffer = new short[bufferSize];
-            while (isRecording) {
-                int read = audioRecord.read(buffer, 0, bufferSize);
-                for (int i = 0; i < read; i++) {
-                    recordedData.add(buffer[i]);
-                }
-            }
-        }).start();
-
-        Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show();
-    }
-
-    private void stopRecording() {
-        Log.d(TAG, "Stopping audio recording");
-        isRecording = false;
-        if (audioRecord != null) {
-            try {
-                audioRecord.stop();
-                audioRecord.release();
-            } catch (IllegalStateException e) {
-                Log.e(TAG, "Error stopping audio recording", e);
-            } finally {
-                audioRecord = null;
-            }
-        }
-        recordButton.setText("Start Recording");
-        Toast.makeText(this, "Recording stopped", Toast.LENGTH_SHORT).show();
-    }
-
-    private void processRecordedAudio() {
-        Log.d(TAG, "Processing recorded audio");
-        float[] audioFloat = new float[recordedData.size()];
-        for (int i = 0; i < recordedData.size(); i++) {
-            audioFloat[i] = (float) recordedData.get(i) / 32768.0f;
-        }
-
+    private void processRecognizedText(String text) {
         int selectedSpeakerId = speakerSpinner.getSelectedItemPosition();
-        Toast.makeText(this, "Processing audio...", Toast.LENGTH_SHORT).show();
+        Toast.makeText(this, "Processing text...", Toast.LENGTH_SHORT).show();
 
         // Disable the record button while processing
         recordButton.setEnabled(false);
 
-        // Hardcoded map of speakers
-        Map<Integer, Integer> speakerMap = new HashMap<Integer, Integer>() {{
-            put(0, 104); // Speaker 1 mapped to 104
-            put(1, 105); // Speaker 2 mapped to 105
-            put(2, 106); // Speaker 3 mapped to 106
-            put(3, 107); // Speaker 4 mapped to 107
-            put(4, 108); // Speaker 5 mapped to 108
-        }};
-
-        audioToAudio.processAudio(audioFloat, selectedSpeakerId, new ApiCall.ApiCallCallback() {
+        audioToAudio.processText(text, selectedSpeakerId, new TextToAudio.TextToAudioCallback() {
             @Override
-            public void onSuccess(@NonNull String narration, @NonNull String status) {
+            public void onSuccess(String narration, String status, float[] audioData) {
                 runOnUiThread(() -> {
                     Toast.makeText(MainActivity.this, "Response received, playing audio...", Toast.LENGTH_SHORT).show();
-                    try {
-                        // Map the selected speaker ID to the actual speaker ID for the synthesizer
-                        int mappedSpeakerId = speakerMap.getOrDefault(selectedSpeakerId, 104); // Default to 104 if not found
-
-                        // Get the synthesized audio from the AudioToAudio class
-                        float[] responseAudio = audioToAudio.getSynthesizer().tts(narration, mappedSpeakerId);
-                        // Play the synthesized audio
-                        playAudio(responseAudio, SAMPLE_RATE);
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error synthesizing or playing audio", e);
-                        Toast.makeText(MainActivity.this, "Error playing audio: " + e.getMessage(), Toast.LENGTH_LONG).show();
-                    }
+                    playAudio(audioData, SAMPLE_RATE);
                     // Re-enable the record button after processing
                     recordButton.setEnabled(true);
                 });
             }
 
             @Override
-            public void onError(@NonNull String error) {
+            public void onError(String error) {
                 runOnUiThread(() -> {
                     Toast.makeText(MainActivity.this, "Error: " + error, Toast.LENGTH_LONG).show();
                     // Re-enable the record button on error
@@ -203,6 +223,31 @@ public class MainActivity extends Activity {
         audioTrack.release();
     }
 
+    private void updateBackgroundImage(int position) {
+        int backgroundResourceId;
+        switch (position) {
+            case 0:
+                backgroundResourceId = R.drawable.background_speaker1;
+                break;
+            case 1:
+                backgroundResourceId = R.drawable.background_speaker2;
+                break;
+            case 2:
+                backgroundResourceId = R.drawable.background_speaker3;
+                break;
+            case 3:
+                backgroundResourceId = R.drawable.background_speaker4;
+                break;
+            case 4:
+                backgroundResourceId = R.drawable.background_speaker5;
+                break;
+            default:
+                backgroundResourceId = R.drawable.default_background;
+                break;
+        }
+        backgroundImage.setImageResource(backgroundResourceId);
+    }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -210,10 +255,19 @@ public class MainActivity extends Activity {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "Record audio permission granted");
                 Toast.makeText(this, "Record audio permission granted", Toast.LENGTH_SHORT).show();
+                toggleListening();
             } else {
                 Log.w(TAG, "Record audio permission denied");
-                Toast.makeText(this, "Record audio permission is required for recording functionality", Toast.LENGTH_LONG).show();
+                Toast.makeText(this, "Record audio permission is required for speech recognition", Toast.LENGTH_LONG).show();
             }
+        }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
         }
     }
 }

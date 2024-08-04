@@ -1,9 +1,10 @@
 <resources>
     <string-array name="speaker_array">
-        <item>Speaker 1</item>
-        <item>Speaker 2</item>
-        <item>Speaker 3</item>
-        <item>Speaker 4</item>
-        <item>Speaker 5</item>
+        <item>Zara</item>
+        <item>Karlah</item>
+        <item>Raphael</item>
+        <item>Johnny</item>
+        <item>Amara</item>
     </string-array>
 </resources>
+

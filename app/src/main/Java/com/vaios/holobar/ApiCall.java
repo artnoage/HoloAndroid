@@ -20,8 +20,6 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
@@ -37,11 +35,6 @@ public class ApiCall {
     private static final int MY_SOCKET_TIMEOUT_MS = 30000; // 30 seconds
     private static final int MY_MAX_RETRIES = 2;
 
-    /**
-     * Constructor for ApiCall class
-     * @param context Application context
-     * @param geminiApiKey API key for Gemini
-     */
     public ApiCall(Context context, String geminiApiKey) {
         this.context = context;
         this.geminiApiKey = geminiApiKey;
@@ -49,10 +42,6 @@ public class ApiCall {
         initializeZeroHistory();
     }
 
-    /**
-     * Initializes the zero history file if it doesn't exist.
-     * This is crucial for the game's state management when starting fresh.
-     */
     private void initializeZeroHistory() {
         File zeroHistoryFile = new File(context.getFilesDir(), "zero_history.pickle");
         if (!zeroHistoryFile.exists()) {
@@ -72,25 +61,14 @@ public class ApiCall {
         }
     }
 
-    /**
-     * Interface for API call callbacks
-     */
     public interface ApiCallCallback {
         void onSuccess(String narration, String status);
         void onError(String error);
     }
 
-    /**
-     * Sends audio data to the API
-     * @param audio Float array of audio data
-     * @param speakerId ID of the speaker
-     * @param sampleRate Sample rate of the audio
-     * @param callback Callback for API response
-     */
-    public void sendAudioToApi(float[] audio, int speakerId, int sampleRate, ApiCallCallback callback) {
-        Log.d(TAG, "Preparing to send audio to API. Audio length: " + audio.length + " samples, Speaker ID: " + speakerId);
+    public void sendTextToApi(String text, int speakerId, ApiCallCallback callback) {
+        Log.d(TAG, "Preparing to send text to API. Text length: " + text.length() + " characters, Speaker ID: " + speakerId);
 
-        // Get the history file
         File historyFile = new File(context.getFilesDir(), "updated_history.pickle");
         if (!historyFile.exists() || !historyFile.canRead()) {
             Log.d(TAG, "Updated history file not found or not readable. Attempting to use zero_history.pickle");
@@ -144,7 +122,7 @@ public class ApiCall {
 
         multipartRequest.addStringPart("agent_number", String.valueOf(speakerId));
         multipartRequest.addStringPart("gemini_api_key", geminiApiKey);
-        multipartRequest.addWavAudioPart("audio_file", audio, sampleRate);
+        multipartRequest.addStringPart("text", text);  // Add text instead of audio
         multipartRequest.addHistoryFilePart("history_file", historyFile);
 
         multipartRequest.setRetryPolicy(new DefaultRetryPolicy(
@@ -156,12 +134,6 @@ public class ApiCall {
         Log.d(TAG, "Request added to queue with custom timeout and retry policy");
     }
 
-    /**
-     * Saves the updated history received from the API
-     * This is crucial for maintaining the game state across interactions
-     * @param updatedHistory Base64 encoded updated history string
-     * @throws IOException If there's an error writing to the file
-     */
     private void saveUpdatedHistory(String updatedHistory) throws IOException {
         File historyFile = new File(context.getFilesDir(), "updated_history.pickle");
         try (FileOutputStream fos = new FileOutputStream(historyFile)) {
@@ -170,13 +142,9 @@ public class ApiCall {
         Log.d(TAG, "Updated history saved to: " + historyFile.getAbsolutePath());
     }
 
-    /**
-     * Inner class for handling multipart requests
-     */
     private static class MultipartRequest extends Request<NetworkResponse> {
         private final Response.Listener<NetworkResponse> mListener;
         private final Map<String, String> mStringParts = new HashMap<>();
-        private final Map<String, AudioData> mAudioParts = new HashMap<>();
         private final Map<String, File> mFileParts = new HashMap<>();
         private final String boundary = "apicall" + System.currentTimeMillis();
 
@@ -189,10 +157,6 @@ public class ApiCall {
 
         public void addStringPart(String name, String value) {
             mStringParts.put(name, value);
-        }
-
-        public void addWavAudioPart(String name, float[] audio, int sampleRate) {
-            mAudioParts.put(name, new AudioData(audio, sampleRate));
         }
 
         public void addHistoryFilePart(String name, File file) {
@@ -212,10 +176,6 @@ public class ApiCall {
                     buildTextPart(bos, entry.getKey(), entry.getValue());
                 }
 
-                for (Map.Entry<String, AudioData> entry : mAudioParts.entrySet()) {
-                    buildAudioPart(bos, entry.getKey(), entry.getValue());
-                }
-
                 for (Map.Entry<String, File> entry : mFileParts.entrySet()) {
                     buildHistoryFilePart(bos, entry.getKey(), entry.getValue());
                 }
@@ -233,16 +193,6 @@ public class ApiCall {
             bos.write((parameterValue + "\r\n").getBytes());
         }
 
-        private void buildAudioPart(ByteArrayOutputStream bos, String parameterName, AudioData audioData) throws IOException {
-            bos.write(("--" + boundary + "\r\n").getBytes());
-            bos.write(("Content-Disposition: form-data; name=\"" + parameterName + "\"; filename=\"audio.wav\"\r\n").getBytes());
-            bos.write(("Content-Type: audio/wav\r\n\r\n").getBytes());
-
-            byte[] wavBytes = floatArrayToWav(audioData.audio, audioData.sampleRate);
-            bos.write(wavBytes);
-            bos.write("\r\n".getBytes());
-        }
-
         private void buildHistoryFilePart(ByteArrayOutputStream bos, String parameterName, File file) throws IOException {
             bos.write(("--" + boundary + "\r\n").getBytes());
             bos.write(("Content-Disposition: form-data; name=\"" + parameterName + "\"; filename=\"" + file.getName() + "\"\r\n").getBytes());
@@ -258,47 +208,6 @@ public class ApiCall {
             fileInputStream.close();
         }
 
-        /**
-         * Converts float array to WAV byte array
-         * @param audio Float array of audio data
-         * @param sampleRate Sample rate of the audio
-         * @return Byte array of WAV data
-         */
-        private byte[] floatArrayToWav(float[] audio, int sampleRate) {
-            byte[] audioData = new byte[audio.length * 2];
-            int bytesPerSample = 2;
-            int numChannels = 1; // Mono
-            int byteRate = sampleRate * numChannels * bytesPerSample;
-            int blockAlign = numChannels * bytesPerSample;
-
-            for (int i = 0; i < audio.length; i++) {
-                short val = (short) (audio[i] * 32767);
-                audioData[i * 2] = (byte) (val & 0x00FF);
-                audioData[i * 2 + 1] = (byte) ((val & 0xFF00) >>> 8);
-            }
-
-            ByteBuffer buffer = ByteBuffer.allocate(44 + audioData.length);
-            buffer.order(ByteOrder.LITTLE_ENDIAN);
-
-            // WAV header
-            buffer.put("RIFF".getBytes());
-            buffer.putInt(36 + audioData.length);
-            buffer.put("WAVE".getBytes());
-            buffer.put("fmt ".getBytes());
-            buffer.putInt(16); // Sub-chunk size
-            buffer.putShort((short) 1); // PCM audio format
-            buffer.putShort((short) numChannels);
-            buffer.putInt(sampleRate);
-            buffer.putInt(byteRate);
-            buffer.putShort((short) blockAlign);
-            buffer.putShort((short) (bytesPerSample * 8)); // Bits per sample
-            buffer.put("data".getBytes());
-            buffer.putInt(audioData.length);
-            buffer.put(audioData);
-
-            return buffer.array();
-        }
-
         @Override
         protected Response<NetworkResponse> parseNetworkResponse(NetworkResponse response) {
             return Response.success(response, HttpHeaderParser.parseCacheHeaders(response));
@@ -307,16 +216,6 @@ public class ApiCall {
         @Override
         protected void deliverResponse(NetworkResponse response) {
             mListener.onResponse(response);
-        }
-
-        private static class AudioData {
-            float[] audio;
-            int sampleRate;
-
-            AudioData(float[] audio, int sampleRate) {
-                this.audio = audio;
-                this.sampleRate = sampleRate;
-            }
         }
     }
 }
