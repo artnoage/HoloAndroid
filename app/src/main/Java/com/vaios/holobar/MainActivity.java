@@ -9,7 +9,6 @@ import android.os.Bundle;
 import android.util.Log;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -30,10 +29,8 @@ public class MainActivity extends Activity {
     private static final int SAMPLE_RATE = 22050;
 
     private VitsOnnxSynthesizer synthesizer;
-    private Tokenizer tokenizer;
     private ApiCall apiCall;
 
-    private EditText inputText;
     private Spinner speakerSpinner;
     private AudioRecord audioRecord;
     private boolean isRecording = false;
@@ -46,9 +43,7 @@ public class MainActivity extends Activity {
 
         Log.d(TAG, "onCreate: Initializing MainActivity");
 
-        inputText = findViewById(R.id.input_text);
         speakerSpinner = findViewById(R.id.speaker_spinner);
-        Button processButton = findViewById(R.id.process_button);
         Button recordButton = findViewById(R.id.record_button);
 
         // Set up speaker spinner
@@ -59,17 +54,6 @@ public class MainActivity extends Activity {
 
         initializeModels();
 
-        processButton.setOnClickListener(v -> {
-            String text = inputText.getText().toString().trim();
-            int speakerId = speakerSpinner.getSelectedItemPosition();
-            if (!text.isEmpty()) {
-                Log.d(TAG, "Process button clicked. Text: " + text + ", Speaker ID: " + speakerId);
-                processUserInput(text, speakerId);
-            } else {
-                Log.w(TAG, "Process button clicked with empty input");
-                Toast.makeText(MainActivity.this, "Input was empty. Please try again.", Toast.LENGTH_SHORT).show();
-            }
-        });
         recordButton.setOnClickListener(v -> {
             if (isRecording) {
                 stopRecording();
@@ -92,9 +76,6 @@ public class MainActivity extends Activity {
 
             Phonemizer.initialize(getAssets(), PHONEMIZER_MODEL_FILE);
             Log.d(TAG, "Phonemizer initialized");
-
-            tokenizer = new Tokenizer(this);
-            Log.d(TAG, "Tokenizer initialized");
 
             apiCall = new ApiCall(this, GEMINI_API_KEY);
             Log.d(TAG, "ApiCall initialized");
@@ -170,46 +151,10 @@ public class MainActivity extends Activity {
             audioFloat[i] = (float) recordedData.get(i) / 32768.0f;
         }
 
-        // Play the recorded audio
-        AudioProcessor.playAudio(audioFloat, SAMPLE_RATE);
-
         int speakerId = speakerSpinner.getSelectedItemPosition();
 
         // Send audio to API
         sendAudioToApi(audioFloat, speakerId);
-    }
-
-    private void processUserInput(String input, int speakerId) {
-        Log.d(TAG, "Processing user input: '" + input + "' for speaker ID: " + speakerId);
-        Toast.makeText(this, "Processing input...", Toast.LENGTH_SHORT).show();
-        new Thread(() -> {
-            try {
-                // Tokenize input if needed
-                List<Integer> inputTokens = tokenizer.textToIds(input);
-                Log.d(TAG, "Input tokens: " + inputTokens);
-
-                // Text to audio
-                float[] inputAudio = synthesizer.tts(input, speakerId);
-                Log.d(TAG, "Generated audio length: " + inputAudio.length + " samples");
-
-                // Play the audio before sending
-                runOnUiThread(() -> {
-                    Log.d(TAG, "Playing generated audio");
-                    Toast.makeText(this, "Playing generated audio...", Toast.LENGTH_SHORT).show();
-                    AudioProcessor.playAudio(inputAudio, SAMPLE_RATE);
-                });
-
-                // Wait for audio to finish playing (you might want to adjust this)
-                Thread.sleep((long) inputAudio.length * 1000L / SAMPLE_RATE + 500L);
-
-                // Send audio to API
-                sendAudioToApi(inputAudio, speakerId);
-
-            } catch (OrtException | InterruptedException e) {
-                Log.e(TAG, "Error processing input", e);
-                runOnUiThread(() -> Toast.makeText(this, "Error processing input: " + e.getMessage(), Toast.LENGTH_LONG).show());
-            }
-        }).start();
     }
 
     private void sendAudioToApi(float[] audio, int speakerId) {
@@ -222,17 +167,16 @@ public class MainActivity extends Activity {
                 Log.d(TAG, "API Response received: " + narration);
                 Log.d(TAG, "API Status: " + status);
 
-                // Process and play the response
-                String[] textChunks = narration.split("(?<=[.!?])\\s+");
-                for (String chunk : textChunks) {
-                    try {
-                        float[] chunkAudio = synthesizer.tts(chunk, speakerId);
-                        runOnUiThread(() -> AudioProcessor.playAudio(chunkAudio, SAMPLE_RATE));
-                        Thread.sleep((long) chunkAudio.length * 1000L / SAMPLE_RATE);
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error synthesizing or playing audio chunk", e);
-                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error synthesizing audio: " + e.getMessage(), Toast.LENGTH_LONG).show());
-                    }
+                // Process the entire response at once
+                try {
+                    float[] responseAudio = synthesizer.tts(narration, speakerId);
+                    runOnUiThread(() -> {
+                        Toast.makeText(MainActivity.this, "Playing response...", Toast.LENGTH_SHORT).show();
+                        AudioProcessor.playAudio(responseAudio, SAMPLE_RATE);
+                    });
+                } catch (Exception e) {
+                    Log.e(TAG, "Error synthesizing or playing audio response", e);
+                    runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error synthesizing audio: " + e.getMessage(), Toast.LENGTH_LONG).show());
                 }
             }
 
