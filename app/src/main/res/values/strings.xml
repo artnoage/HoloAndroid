@@ -3,4 +3,7 @@
     <string name="process">Process</string>
     <string name="enter_text_here">Enter text here</string>
     <string name="app_name">HoloBar</string>
+    <string name="input_hint">Enter text here</string>
+    <string name="process_button_text">Process</string>
+    <string name="record_button_text">Press and hold to record</string>
 </resources>

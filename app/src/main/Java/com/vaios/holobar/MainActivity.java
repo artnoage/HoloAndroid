@@ -1,5 +1,10 @@
 package com.vaios.holobar;
+
 import android.app.Activity;
+import android.content.pm.PackageManager;
+import android.media.AudioFormat;
+import android.media.AudioRecord;
+import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.util.Log;
 import android.widget.ArrayAdapter;
@@ -7,16 +12,22 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.Spinner;
 import android.widget.Toast;
+import androidx.annotation.NonNull;
+import androidx.core.app.ActivityCompat;
+import androidx.core.content.ContextCompat;
 import java.io.IOException;
-import java.util.Arrays;
+import java.util.ArrayList;
 import java.util.List;
 import ai.onnxruntime.OrtException;
+import android.Manifest;
 
 public class MainActivity extends Activity {
     private static final String TAG = "MainActivity";
     private static final String VITS_MODEL_FILE = "vits_model.onnx";
     private static final String PHONEMIZER_MODEL_FILE = "phonemizer_model.onnx";
     private static final String GEMINI_API_KEY = "AIzaSyBzw4vQsyQFcpA9hr4ncge4BYZW0CcT_ng";
+    private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
+    private static final int SAMPLE_RATE = 22050;
 
     private VitsOnnxSynthesizer synthesizer;
     private Tokenizer tokenizer;
@@ -24,6 +35,9 @@ public class MainActivity extends Activity {
 
     private EditText inputText;
     private Spinner speakerSpinner;
+    private AudioRecord audioRecord;
+    private boolean isRecording = false;
+    private final List<Short> recordedData = new ArrayList<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +49,7 @@ public class MainActivity extends Activity {
         inputText = findViewById(R.id.input_text);
         speakerSpinner = findViewById(R.id.speaker_spinner);
         Button processButton = findViewById(R.id.process_button);
+        Button recordButton = findViewById(R.id.record_button);
 
         // Set up speaker spinner
         ArrayAdapter<CharSequence> adapter = ArrayAdapter.createFromResource(this,
@@ -53,6 +68,18 @@ public class MainActivity extends Activity {
             } else {
                 Log.w(TAG, "Process button clicked with empty input");
                 Toast.makeText(MainActivity.this, "Input was empty. Please try again.", Toast.LENGTH_SHORT).show();
+            }
+        });
+        recordButton.setOnClickListener(v -> {
+            if (isRecording) {
+                stopRecording();
+                processRecordedAudio();
+            } else {
+                if (checkPermission()) {
+                    startRecording();
+                } else {
+                    requestPermission();
+                }
             }
         });
     }
@@ -79,6 +106,79 @@ public class MainActivity extends Activity {
         }
     }
 
+    private boolean checkPermission() {
+        return ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void requestPermission() {
+        ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_RECORD_AUDIO_PERMISSION);
+    }
+
+    private void startRecording() {
+        if (!checkPermission()) {
+            Log.w(TAG, "Attempted to start recording without permission");
+            Toast.makeText(this, "Record audio permission is required", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        Log.d(TAG, "Starting audio recording");
+        recordedData.clear();
+        int bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT);
+        try {
+            audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSize);
+
+            audioRecord.startRecording();
+            isRecording = true;
+
+            new Thread(() -> {
+                short[] buffer = new short[bufferSize];
+                while (isRecording) {
+                    int read = audioRecord.read(buffer, 0, bufferSize);
+                    for (int i = 0; i < read; i++) {
+                        recordedData.add(buffer[i]);
+                    }
+                }
+            }).start();
+
+            Toast.makeText(this, "Recording started", Toast.LENGTH_SHORT).show();
+        } catch (SecurityException e) {
+            Log.e(TAG, "SecurityException when starting recording", e);
+            Toast.makeText(this, "Error: Permission denied for audio recording", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private void stopRecording() {
+        Log.d(TAG, "Stopping audio recording");
+        isRecording = false;
+        if (audioRecord != null) {
+            try {
+                audioRecord.stop();
+                audioRecord.release();
+            } catch (IllegalStateException e) {
+                Log.e(TAG, "Error stopping audio recording", e);
+            } finally {
+                audioRecord = null;
+            }
+        }
+        Toast.makeText(this, "Recording stopped", Toast.LENGTH_SHORT).show();
+    }
+
+    private void processRecordedAudio() {
+        Log.d(TAG, "Processing recorded audio");
+        float[] audioFloat = new float[recordedData.size()];
+        for (int i = 0; i < recordedData.size(); i++) {
+            audioFloat[i] = (float) recordedData.get(i) / 32768.0f;
+        }
+
+        // Play the recorded audio
+        AudioProcessor.playAudio(audioFloat, SAMPLE_RATE);
+
+        int speakerId = speakerSpinner.getSelectedItemPosition();
+
+        // Send audio to API
+        sendAudioToApi(audioFloat, speakerId);
+    }
+
     private void processUserInput(String input, int speakerId) {
         Log.d(TAG, "Processing user input: '" + input + "' for speaker ID: " + speakerId);
         Toast.makeText(this, "Processing input...", Toast.LENGTH_SHORT).show();
@@ -96,56 +196,65 @@ public class MainActivity extends Activity {
                 runOnUiThread(() -> {
                     Log.d(TAG, "Playing generated audio");
                     Toast.makeText(this, "Playing generated audio...", Toast.LENGTH_SHORT).show();
-                    AudioProcessor.playAudio(inputAudio, synthesizer.getSampleRate());
+                    AudioProcessor.playAudio(inputAudio, SAMPLE_RATE);
                 });
 
                 // Wait for audio to finish playing (you might want to adjust this)
-                Thread.sleep((long) inputAudio.length * 1000L / synthesizer.getSampleRate() + 500L);
+                Thread.sleep((long) inputAudio.length * 1000L / SAMPLE_RATE + 500L);
 
-                // Send audio to FastAPI and get text response
-                Log.d(TAG, "Sending audio to API");
-                apiCall.sendAudioToApi(inputAudio, speakerId, synthesizer.getSampleRate(), new ApiCall.ApiCallCallback() {
-                    @Override
-                    public void onSuccess(String narration, String status) {
-                        // Handle success
-                        Log.d(TAG, "API Response received: " + narration);
-                        Log.d(TAG, "API Status: " + status);
-                        // Process the response
-                        List<String> textChunks = Arrays.asList(narration.split("(?<=[.!?])\\s+"));
-                        Log.d(TAG, "Split text into " + textChunks.size() + " chunks");
-
-                        // Synthesize and play each chunk
-                        for (String chunk : textChunks) {
-                            try {
-                                float[] chunkAudio = synthesizer.tts(chunk, speakerId);
-                                Log.d(TAG, "Synthesized chunk: " + chunk.substring(0, Math.min(chunk.length(), 50)) + "...");
-
-                                // Play each chunk as it's produced
-                                runOnUiThread(() -> AudioProcessor.playAudio(chunkAudio, synthesizer.getSampleRate()));
-
-                                // Wait for the chunk to finish playing before synthesizing the next one
-                                Thread.sleep((long) chunkAudio.length * 1000L / synthesizer.getSampleRate());
-                            } catch (Exception e) {
-                                Log.e(TAG, "Error synthesizing or playing audio chunk", e);
-                                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error synthesizing audio: " + e.getMessage(), Toast.LENGTH_LONG).show());
-                                return;
-                            }
-                        }
-
-                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Audio processing complete", Toast.LENGTH_SHORT).show());
-                    }
-
-                    @Override
-                    public void onError(String error) {
-                        Log.e(TAG, "API call error: " + error);
-                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error communicating with the API: " + error, Toast.LENGTH_LONG).show());
-                    }
-                });
+                // Send audio to API
+                sendAudioToApi(inputAudio, speakerId);
 
             } catch (OrtException | InterruptedException e) {
                 Log.e(TAG, "Error processing input", e);
                 runOnUiThread(() -> Toast.makeText(this, "Error processing input: " + e.getMessage(), Toast.LENGTH_LONG).show());
             }
         }).start();
+    }
+
+    private void sendAudioToApi(float[] audio, int speakerId) {
+        Log.d(TAG, "Sending audio to API. Length: " + audio.length + ", Speaker ID: " + speakerId);
+        Toast.makeText(this, "Processing audio...", Toast.LENGTH_SHORT).show();
+
+        apiCall.sendAudioToApi(audio, speakerId, SAMPLE_RATE, new ApiCall.ApiCallCallback() {
+            @Override
+            public void onSuccess(@NonNull String narration, @NonNull String status) {
+                Log.d(TAG, "API Response received: " + narration);
+                Log.d(TAG, "API Status: " + status);
+
+                // Process and play the response
+                String[] textChunks = narration.split("(?<=[.!?])\\s+");
+                for (String chunk : textChunks) {
+                    try {
+                        float[] chunkAudio = synthesizer.tts(chunk, speakerId);
+                        runOnUiThread(() -> AudioProcessor.playAudio(chunkAudio, SAMPLE_RATE));
+                        Thread.sleep((long) chunkAudio.length * 1000L / SAMPLE_RATE);
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error synthesizing or playing audio chunk", e);
+                        runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error synthesizing audio: " + e.getMessage(), Toast.LENGTH_LONG).show());
+                    }
+                }
+            }
+
+            @Override
+            public void onError(@NonNull String error) {
+                Log.e(TAG, "API call error: " + error);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Error communicating with the API: " + error, Toast.LENGTH_LONG).show());
+            }
+        });
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                Log.d(TAG, "Record audio permission granted");
+                Toast.makeText(this, "Record audio permission granted", Toast.LENGTH_SHORT).show();
+            } else {
+                Log.w(TAG, "Record audio permission denied");
+                Toast.makeText(this, "Record audio permission is required for recording functionality", Toast.LENGTH_LONG).show();
+            }
+        }
     }
 }

@@ -10,7 +10,6 @@ import java.util.*;
 
 public class VitsOnnxSynthesizer implements AutoCloseable {
     private static final String TAG = "VitsOnnxSynthesizer";
-    private static final int SAMPLE_RATE = 22050;
     private final Tokenizer tokenizer;
     private final OrtEnvironment env;
     private final OrtSession session;
@@ -59,10 +58,6 @@ public class VitsOnnxSynthesizer implements AutoCloseable {
             float[][][] audio = (float[][][]) result.get(0).getValue();
             return audio[0][0];
         }
-    }
-
-    public int getSampleRate() {
-        return SAMPLE_RATE;
     }
 
     @Override

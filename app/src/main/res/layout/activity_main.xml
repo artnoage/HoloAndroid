@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<androidx.constraintlayout.widget.ConstraintLayout 
+<androidx.constraintlayout.widget.ConstraintLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:padding="16dp">
@@ -10,17 +11,22 @@
         android:id="@+id/input_text"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:hint="Enter text here"
+        android:hint="@string/input_hint"
         android:inputType="text"
+        android:importantForAutofill="yes"
+        android:autofillHints="@string/input_hint"
+        android:minHeight="48dp"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintWidth_max="340dp" />
 
     <Spinner
         android:id="@+id/speaker_spinner"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
+        android:minHeight="48dp"
         app:layout_constraintTop_toBottomOf="@id/input_text"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
@@ -30,8 +36,22 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Process"
+        android:text="@string/process_button_text"
+        android:minWidth="88dp"
+        android:minHeight="48dp"
         app:layout_constraintTop_toBottomOf="@id/speaker_spinner"
         app:layout_constraintStart_toStartOf="parent" />
+
+    <Button
+        android:id="@+id/record_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="@string/record_button_text"
+        android:minWidth="88dp"
+        android:minHeight="48dp"
+        app:layout_constraintTop_toBottomOf="@id/process_button"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

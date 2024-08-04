@@ -1,7 +1,6 @@
 package com.vaios.holobar;
 
 import android.content.Context;
-import android.util.Base64;
 import android.util.Log;
 
 import com.android.volley.DefaultRetryPolicy;
@@ -23,6 +22,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -86,14 +86,6 @@ public class ApiCall {
      * @param speakerId ID of the speaker
      * @param sampleRate Sample rate of the audio
      * @param callback Callback for API response
-     *
-     * Note: This method sends data to an API that expects:
-     * 1. audio_file: A WAV file (UploadFile)
-     * 2. agent_number: An integer (Form data)
-     * 3. history_file: A pickle file (UploadFile)
-     * 4. gemini_api_key: A string (Form data)
-     *
-     * The history file is crucial for maintaining the game state and conversation context.
      */
     public void sendAudioToApi(float[] audio, int speakerId, int sampleRate, ApiCallCallback callback) {
         Log.d(TAG, "Preparing to send audio to API. Audio length: " + audio.length + " samples, Speaker ID: " + speakerId);
@@ -152,7 +144,7 @@ public class ApiCall {
 
         multipartRequest.addStringPart("agent_number", String.valueOf(speakerId));
         multipartRequest.addStringPart("gemini_api_key", geminiApiKey);
-        multipartRequest.addAudioPart("audio_file", audio, sampleRate);
+        multipartRequest.addWavAudioPart("audio_file", audio, sampleRate);
         multipartRequest.addHistoryFilePart("history_file", historyFile);
 
         multipartRequest.setRetryPolicy(new DefaultRetryPolicy(
@@ -173,7 +165,7 @@ public class ApiCall {
     private void saveUpdatedHistory(String updatedHistory) throws IOException {
         File historyFile = new File(context.getFilesDir(), "updated_history.pickle");
         try (FileOutputStream fos = new FileOutputStream(historyFile)) {
-            fos.write(Base64.decode(updatedHistory, Base64.DEFAULT));
+            fos.write(updatedHistory.getBytes(StandardCharsets.UTF_8));
         }
         Log.d(TAG, "Updated history saved to: " + historyFile.getAbsolutePath());
     }
@@ -199,7 +191,7 @@ public class ApiCall {
             mStringParts.put(name, value);
         }
 
-        public void addAudioPart(String name, float[] audio, int sampleRate) {
+        public void addWavAudioPart(String name, float[] audio, int sampleRate) {
             mAudioParts.put(name, new AudioData(audio, sampleRate));
         }
 
