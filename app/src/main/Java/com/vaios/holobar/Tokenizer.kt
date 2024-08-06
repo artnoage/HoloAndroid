@@ -1,138 +1,130 @@
-package com.vaios.holobar;
-import org.apache.commons.lang3.tuple.ImmutablePair;
-import com.ibm.icu.text.RuleBasedNumberFormat;
-import android.content.Context;
-import java.io.IOException;
-import java.io.InputStream;
-import java.text.Normalizer;
-import java.util.*;
-import java.util.regex.Pattern;
-import java.util.regex.Matcher;
-import java.util.Locale;
+package com.vaios.holobar
 
-public class Tokenizer {
-    private final String textSymbols;
-    private final boolean lowercase;
-    private final Map<String, Integer> tokenToIdx;
-    private final Phonemizer phonemizer;
-    private final List<ImmutablePair<Pattern, String>> abbreviations;
-    private final String languageCodeEn;
-    private final String languageCodeDe;
-    private final String padToken;
-    private final String endToken;
-    private static final Pattern WHITESPACE_PATTERN = Pattern.compile("\\s+");
-    private static final Pattern NUMBER_PATTERN = Pattern.compile("\\b\\d+\\b");
-    private final RuleBasedNumberFormat numberFormat;
+import org.apache.commons.lang3.tuple.ImmutablePair
+import com.ibm.icu.text.RuleBasedNumberFormat
+import android.content.Context
+import java.io.IOException
+import java.text.Normalizer
+import java.util.*
+import java.util.regex.Pattern
+import java.util.Locale
 
-    public Tokenizer(Context context) {
-        Properties config = loadConfig(context);
-        this.textSymbols = config.getProperty("text_symbols");
-        this.lowercase = Boolean.parseBoolean(config.getProperty("lowercase"));
-        this.languageCodeEn = config.getProperty("language_code_en");
-        this.languageCodeDe = config.getProperty("language_code_de");
-        this.padToken = config.getProperty("pad_token");
-        this.endToken = config.getProperty("end_token");
-        this.tokenToIdx = createTokenToIdx();
-        this.phonemizer = new Phonemizer(config, tokenToIdx);
-        this.abbreviations = createAbbreviations(config);
-        this.numberFormat = new RuleBasedNumberFormat(Locale.US, RuleBasedNumberFormat.SPELLOUT);
+class Tokenizer(context: Context) {
+    private val textSymbols: String
+    private val lowercase: Boolean
+    private val tokenToIdx: Map<String, Int>
+    private val phonemic: Phonemic
+    private val abbreviations: List<ImmutablePair<Pattern, String>>
+    private val languageCodeEn: String
+    private val languageCodeDe: String
+    private val padToken: String
+    private val endToken: String
+    private val numberFormat: RuleBasedNumberFormat
+
+    companion object {
+        private val WHITESPACE_PATTERN = Pattern.compile("\\s+")
+        private val NUMBER_PATTERN = Pattern.compile("\\b\\d+\\b")
     }
 
-    private Properties loadConfig(Context context) {
-        Properties prop = new Properties();
-        String resourceName = "tokenizer_config.properties";
-        try (InputStream input = context.getAssets().open(resourceName)) {
-            prop.load(input);
-        } catch (IOException ex) {
-            throw new TokenizerException("Failed to load configuration", ex);
-        }
-        return prop;
+    init {
+        val config = loadConfig(context)
+        textSymbols = config.getProperty("text_symbols")
+        lowercase = config.getProperty("lowercase").toBoolean()
+        languageCodeEn = config.getProperty("language_code_en")
+        languageCodeDe = config.getProperty("language_code_de")
+        padToken = config.getProperty("pad_token")
+        endToken = config.getProperty("end_token")
+        tokenToIdx = createTokenToIdx()
+        phonemic = Phonemic(config, tokenToIdx)
+        abbreviations = createAbbreviations(config)
+        numberFormat = RuleBasedNumberFormat(Locale.US, RuleBasedNumberFormat.SPELLOUT)
     }
 
-    private Map<String, Integer> createTokenToIdx() {
-        Map<String, Integer> tokenToIdx = new LinkedHashMap<>();
-        tokenToIdx.put(padToken, 0);
-        tokenToIdx.put(languageCodeEn, tokenToIdx.size());
-        tokenToIdx.put(languageCodeDe, tokenToIdx.size());
-        tokenToIdx.put(endToken, tokenToIdx.size());
-        
-        for (char c = 'a'; c <= 'z'; c++) {
-            tokenToIdx.put(String.valueOf(c), tokenToIdx.size());
-        }
-        for (char c = 'A'; c <= 'Z'; c++) {
-            tokenToIdx.put(String.valueOf(c), tokenToIdx.size());
-        }
-        
-        String germanChars = "äöüÄÖÜß";
-        for (char c : germanChars.toCharArray()) {
-            tokenToIdx.put(String.valueOf(c), tokenToIdx.size());
-        }
-        tokenToIdx.put("'", tokenToIdx.size());
-
-        return tokenToIdx;
-    }
-
-    private List<ImmutablePair<Pattern, String>> createAbbreviations(Properties config) {
-        List<ImmutablePair<Pattern, String>> abbr = new ArrayList<>();
-        for (String key : config.stringPropertyNames()) {
-            if (key.startsWith("abbr.")) {
-                String abbreviation = key.substring(5);
-                String expansion = config.getProperty(key);
-                Pattern pattern = Pattern.compile("\\b" + abbreviation + "\\.", Pattern.CASE_INSENSITIVE);
-                abbr.add(ImmutablePair.of(pattern, expansion));
+    private fun loadConfig(context: Context): Properties {
+        val prop = Properties()
+        val resourceName = "tokenizer_config.properties"
+        try {
+            context.assets.open(resourceName).use { input ->
+                    prop.load(input)
             }
+        } catch (ex: IOException) {
+            throw TokenizerException("Failed to load configuration", ex)
         }
-        return abbr;
+        return prop
     }
 
-    private String convertToAscii(String text) {
+    private fun createTokenToIdx(): Map<String, Int> {
+        val tokenToIdx = LinkedHashMap<String, Int>()
+        tokenToIdx[padToken] = 0
+        tokenToIdx[languageCodeEn] = tokenToIdx.size
+        tokenToIdx[languageCodeDe] = tokenToIdx.size
+        tokenToIdx[endToken] = tokenToIdx.size
+
+                ('a'..'z').forEach { c ->
+                tokenToIdx[c.toString()] = tokenToIdx.size
+        }
+        ('A'..'Z').forEach { c ->
+                tokenToIdx[c.toString()] = tokenToIdx.size
+        }
+
+        "äöüÄÖÜß".forEach { c ->
+                tokenToIdx[c.toString()] = tokenToIdx.size
+        }
+        tokenToIdx["'"] = tokenToIdx.size
+
+        return tokenToIdx
+    }
+
+    private fun createAbbreviations(config: Properties): List<ImmutablePair<Pattern, String>> {
+        return config.stringPropertyNames()
+                .filter { it.startsWith("abbr.") }
+            .map { key ->
+                val abbreviation = key.substring(5)
+            val expansion = config.getProperty(key)
+            val pattern = Pattern.compile("\\b$abbreviation\\.", Pattern.CASE_INSENSITIVE)
+            ImmutablePair.of(pattern, expansion)
+        }
+    }
+
+    private fun convertToAscii(text: String): String {
         return Normalizer.normalize(text, Normalizer.Form.NFD)
-                .replaceAll("[^\\p{ASCII}]", "");
+                .replace("[^\\p{ASCII}]".toRegex(), "")
     }
 
-    private String expandAbbreviations(String text) {
-        for (ImmutablePair<Pattern, String> pair : abbreviations) {
-            text = pair.left.matcher(text).replaceAll(pair.right);
+    private fun expandAbbreviations(text: String): String {
+        var result = text
+        for ((pattern, replacement) in abbreviations) {
+            result = pattern.matcher(result).replaceAll(replacement)
         }
-        return text;
+        return result
     }
 
-    private String convertNumbersToWords(String text) {
-        Matcher matcher = NUMBER_PATTERN.matcher(text);
-        StringBuffer sb = new StringBuffer();
+    private fun convertNumbersToWords(text: String): String {
+        val matcher = NUMBER_PATTERN.matcher(text)
+        val sb = StringBuffer()
         while (matcher.find()) {
-            int number = Integer.parseInt(matcher.group());
-            matcher.appendReplacement(sb, numberFormat.format(number));
+            val number = matcher.group().toInt()
+            matcher.appendReplacement(sb, numberFormat.format(number))
         }
-        matcher.appendTail(sb);
-        return sb.toString();
+        matcher.appendTail(sb)
+        return sb.toString()
     }
 
-    private String cleanText(String text) {
-        StringBuilder sb = new StringBuilder(text.length());
-        sb.append(Normalizer.normalize(text, Normalizer.Form.NFD).replaceAll("[^\\p{ASCII}]", ""));
+    private fun cleanText(text: String): String {
+        val sb = StringBuilder(text.length)
+        sb.append(convertToAscii(text))
         if (lowercase) {
-            for (int i = 0; i < sb.length(); i++) {
-                sb.setCharAt(i, Character.toLowerCase(sb.charAt(i)));
-            }
+            sb.toString().lowercase()
         }
-        String expanded = expandAbbreviations(sb.toString());
-        expanded = convertNumbersToWords(expanded);
-        return WHITESPACE_PATTERN.matcher(expanded).replaceAll(" ").trim();
+        var expanded = expandAbbreviations(sb.toString())
+        expanded = convertNumbersToWords(expanded)
+        return WHITESPACE_PATTERN.matcher(expanded).replaceAll(" ").trim()
     }
 
-    public List<Integer> textToIds(String text) {
-        String cleanedText = cleanText(text);
-        return phonemizer.infer(cleanedText);
+    fun textToIds(text: String): List<Int> {
+        val cleanedText = cleanText(text)
+        return phonemic.infer(cleanedText)
     }
 
-    public static class TokenizerException extends RuntimeException {
-        public TokenizerException(String message) {
-            super(message);
-        }
-
-        public TokenizerException(String message, Throwable cause) {
-            super(message, cause);
-        }
-    }
+    class TokenizerException(message: String, cause: Throwable) : RuntimeException(message, cause)
 }

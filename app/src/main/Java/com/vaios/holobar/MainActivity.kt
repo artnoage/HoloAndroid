@@ -31,7 +31,8 @@ class MainActivity : Activity() {
     private lateinit var backgroundImage: ImageView
     private lateinit var speechRecognitionManager: SpeechRecognitionManager
     private lateinit var progressBar: ProgressBar
-    private lateinit var responseTextView: TextView
+    private lateinit var scrollView: ScrollView
+    private lateinit var responseContainer: LinearLayout
 
     private var mediaPlayer: MediaPlayer? = null
     private var currentSongIndex = 0
@@ -43,6 +44,7 @@ class MainActivity : Activity() {
     private lateinit var sendTextButton: Button
 
     private var isListening = false
+    private var audioPlaybackCompleted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -58,9 +60,8 @@ class MainActivity : Activity() {
         progressBar = findViewById(R.id.progress_bar)
         textInput = findViewById(R.id.text_input)
         sendTextButton = findViewById(R.id.send_text_button)
-        responseTextView = findViewById(R.id.response_text_view)
-
-        responseTextView.movementMethod = ScrollingMovementMethod()
+        scrollView = findViewById(R.id.scroll_view)
+        responseContainer = findViewById(R.id.response_container)
 
         setupSpeakerSpinner()
         setupButtons()
@@ -199,17 +200,23 @@ class MainActivity : Activity() {
                 runOnUiThread {
                     Log.d(TAG, "Response received. Status: $status, Narration: $narration")
 
-                    // Start streaming text immediately
-                    streamText(narration)
+                    audioPlaybackCompleted = false
 
-                    // Play audio in a separate thread
-                    Thread {
-                        playAudio(audioData)
-                        runOnUiThread {
-                            // Resume background music after audio playback
-                            mediaPlayer?.start()
-                        }
-                    }.start()
+                    // Start streaming text immediately
+                    val responseTextView = createNewResponseTextView()
+                    streamText(narration, responseTextView)
+
+                    // Play audio in a separate thread with a small delay
+                    Handler(Looper.getMainLooper()).postDelayed({
+                        Thread {
+                            playAudio(audioData)
+                            runOnUiThread {
+                                audioPlaybackCompleted = true
+                                // Resume background music after audio playback
+                                mediaPlayer?.start()
+                            }
+                        }.start()
+                    }, 500) // 500ms delay
 
                     startListeningButton.isEnabled = true
                     startListeningButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
@@ -231,9 +238,20 @@ class MainActivity : Activity() {
         })
     }
 
-    private fun streamText(text: String) {
-        responseTextView.visibility = View.VISIBLE
-        responseTextView.text = ""
+    private fun createNewResponseTextView(): TextView {
+        val newTextView = TextView(this).apply {
+            layoutParams = LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.MATCH_PARENT,
+                LinearLayout.LayoutParams.WRAP_CONTENT
+            )
+            setTextIsSelectable(true)
+        }
+        responseContainer.addView(newTextView)
+        return newTextView
+    }
+
+    private fun streamText(text: String, textView: TextView) {
+        textView.text = ""
 
         val words = text.split(" ")
         var currentIndex = 0
@@ -242,19 +260,28 @@ class MainActivity : Activity() {
         val textStreamer = object : Runnable {
             override fun run() {
                 if (currentIndex < words.size) {
-                    responseTextView.append(words[currentIndex] + " ")
+                    textView.append(words[currentIndex] + " ")
                     currentIndex++
                     handler.postDelayed(this, 100) // Adjust delay as needed
+                    scrollView.fullScroll(View.FOCUS_DOWN)
                 } else {
-                    // Schedule hiding the text bubble after 2 seconds
-                    handler.postDelayed({
-                        responseTextView.visibility = View.GONE
-                    }, 2000)
+                    // Start checking if audio has completed
+                    checkAudioCompletion(handler)
                 }
             }
         }
 
         handler.post(textStreamer)
+    }
+
+    private fun checkAudioCompletion(handler: Handler) {
+        if (audioPlaybackCompleted) {
+            handler.postDelayed({
+                // Do nothing, text remains visible
+            }, 2000)
+        } else {
+            handler.postDelayed({ checkAudioCompletion(handler) }, 100)
+        }
     }
 
     private fun playAudio(audio: FloatArray) {
@@ -280,8 +307,10 @@ class MainActivity : Activity() {
                     release()
                 }
             Log.d(TAG, "Audio playback completed")
+            audioPlaybackCompleted = true
         } catch (e: Exception) {
             Log.e(TAG, "Error playing audio: ${e.message}")
+            audioPlaybackCompleted = true
         }
     }
 

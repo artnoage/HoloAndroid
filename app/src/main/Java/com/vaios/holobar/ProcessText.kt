@@ -13,11 +13,11 @@ class ProcessText(private val context: Context, private val apiKey: String) {
 
         // Hardcoded matrix for speaker ID mapping
         private val SPEAKER_ID_MATRIX = arrayOf(
-            intArrayOf(0, 79),
-            intArrayOf(1, 90),
-            intArrayOf(2, 33),
-            intArrayOf(3, 109),
-            intArrayOf(4, 100)
+            intArrayOf(0, 8),
+            intArrayOf(1, 73),
+            intArrayOf(2, 6),
+            intArrayOf(3, 91),
+            intArrayOf(4, 97)
         )
     }
 
@@ -34,7 +34,7 @@ class ProcessText(private val context: Context, private val apiKey: String) {
             synthesizer = VitsOnnxSynthesizer(context, VITS_MODEL_FILE)
             Log.d(TAG, "VITS synthesizer initialized")
 
-            Phonemizer.initialize(context.assets, PHONEMIZER_MODEL_FILE)
+            Phonemic.initialize(context.assets, PHONEMIZER_MODEL_FILE)
             Log.d(TAG, "Phonemizer initialized")
 
             apiCall = ApiCall(context, apiKey)

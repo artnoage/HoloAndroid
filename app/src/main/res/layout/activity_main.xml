@@ -4,7 +4,8 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    tools:context=".MainActivity">
 
     <ImageView
         android:id="@+id/background_image"
@@ -19,22 +20,41 @@
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.0" />
 
-    <TextView
-        android:id="@+id/response_text_view"
-        android:layout_width="200dp"
-        android:layout_height="150dp"
+    <ScrollView
+        android:id="@+id/scroll_view"
+        android:layout_width="184dp"
+        android:layout_height="128dp"
         android:layout_margin="16dp"
-        android:background="@android:color/black"
-        android:textColor="@android:color/white"
-        android:padding="30dp"
-        android:scrollbars="vertical"
-        android:fadeScrollbars="false"
-        android:gravity="top"
-        android:visibility="gone"
-        android:maxLines="100"
-        app:layout_constraintTop_toTopOf="parent"
+        android:background="@android:color/white"
+        android:contentDescription="@string/scroll_view_description"
+        app:layout_constraintBottom_toTopOf="@id/text_input"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintVertical_bias="0.1" />
+        app:layout_constraintHorizontal_bias="1.0"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.286">
+
+        <LinearLayout
+            android:id="@+id/response_container"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+
+            <TextView
+                android:id="@+id/response_text_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                android:background="@android:color/white"
+                android:contentDescription="@string/response_text_view_description"
+                android:fadeScrollbars="false"
+                android:gravity="top"
+                android:maxLines="100"
+                android:padding="30dp"
+                android:scrollbars="vertical"
+                android:textColor="@android:color/black"
+                android:visibility="visible" />
+        </LinearLayout>
+    </ScrollView>
 
     <EditText
         android:id="@+id/text_input"
@@ -117,12 +137,15 @@
 
     <ProgressBar
         android:id="@+id/progress_bar"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
+        android:layout_width="0dp"
+        android:layout_height="8dp"
+        android:layout_marginTop="8dp"
+        android:layout_marginBottom="8dp"
+        android:indeterminate="true"
         android:visibility="gone"
-        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintBottom_toTopOf="@+id/text_input"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent" />
+        app:layout_constraintTop_toBottomOf="@id/scroll_view" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -38,4 +38,6 @@
     <string name="Send_text">Send Text</string>
     <string name="enter_api_key_optional">Enter API key (optional)</string>
     <string name="no_key_exists">No API key exists</string>
+    <string name="scroll_view_description">Scrollable area containing response text</string>
+    <string name="response_text_view_description">Response text view</string>
 </resources>
