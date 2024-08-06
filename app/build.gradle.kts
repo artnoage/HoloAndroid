@@ -9,8 +9,8 @@ android {
 
     defaultConfig {
         applicationId = "com.vaios.holobar"
-        minSdk = 25
-        targetSdk = 33
+        minSdk = 33
+        targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 

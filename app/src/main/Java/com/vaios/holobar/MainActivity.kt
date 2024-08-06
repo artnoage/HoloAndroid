@@ -2,23 +2,18 @@ package com.vaios.holobar
 
 import android.Manifest
 import android.app.Activity
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.os.Bundle
-import android.speech.RecognitionListener
-import android.speech.RecognizerIntent
-import android.speech.SpeechRecognizer
 import android.util.Log
 import android.view.View
 import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.File
-import java.util.*
 
 class MainActivity : Activity() {
     companion object {
@@ -29,15 +24,19 @@ class MainActivity : Activity() {
 
     private lateinit var textToAudio: TextToAudio
     private lateinit var speakerSpinner: Spinner
-    private lateinit var startTalkingButton: Button
+    private lateinit var startListeningButton: Button
     private lateinit var backgroundImage: ImageView
-    private lateinit var speechRecognizer: SpeechRecognizer
+    private lateinit var speechRecognitionManager: SpeechRecognitionManager
+    private lateinit var progressBar: ProgressBar
 
     private var mediaPlayer: MediaPlayer? = null
     private var currentSongIndex = 0
     private val songs = intArrayOf(R.raw.song1, R.raw.song2, R.raw.song3, R.raw.song4)
     private lateinit var nextSongButton: Button
     private lateinit var restartButton: Button
+
+    private lateinit var textInput: EditText
+    private lateinit var sendTextButton: Button
 
     private var isListening = false
 
@@ -48,24 +47,31 @@ class MainActivity : Activity() {
         Log.d(TAG, "onCreate: Initializing MainActivity")
 
         speakerSpinner = findViewById(R.id.speaker_spinner)
-        startTalkingButton = findViewById(R.id.start_talking_button)
+        startListeningButton = findViewById(R.id.start_listening_button)
         backgroundImage = findViewById(R.id.background_image)
         nextSongButton = findViewById(R.id.next_song_button)
         restartButton = findViewById(R.id.restart_button)
+        progressBar = findViewById(R.id.progress_bar)
+        textInput = findViewById(R.id.text_input)
+        sendTextButton = findViewById(R.id.send_text_button)
 
         setupSpeakerSpinner()
         setupButtons()
 
-        try {
-            textToAudio = TextToAudio(this)
-        } catch (e: RuntimeException) {
-            Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
-            finish()
-            return
-        }
+        val apiKey = loadApiKey()
+        textToAudio = TextToAudio(this, apiKey)
 
-        initializeSpeechRecognizer()
+        speechRecognitionManager = SpeechRecognitionManager(this)
         initializeMediaPlayer()
+    }
+
+    private fun loadApiKey(): String {
+        return try {
+            assets.open("gemini_api_key.txt").bufferedReader().use { it.readText().trim() }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading API key: ${e.message}")
+            ""
+        }
     }
 
     private fun setupSpeakerSpinner() {
@@ -90,7 +96,7 @@ class MainActivity : Activity() {
     }
 
     private fun setupButtons() {
-        startTalkingButton.setOnClickListener {
+        startListeningButton.setOnClickListener {
             if (checkPermission()) {
                 if (!isListening) {
                     startListening()
@@ -104,6 +110,16 @@ class MainActivity : Activity() {
 
         nextSongButton.setOnClickListener { playNextSong() }
         restartButton.setOnClickListener { deleteUpdatedHistory() }
+
+        sendTextButton.setOnClickListener {
+            val text = textInput.text.toString()
+            if (text.isNotEmpty()) {
+                processRecognizedText(text)
+                textInput.text.clear()
+            } else {
+                Toast.makeText(this, "Please enter some text", Toast.LENGTH_SHORT).show()
+            }
+        }
     }
 
     private fun initializeMediaPlayer() {
@@ -129,57 +145,29 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun initializeSpeechRecognizer() {
-        speechRecognizer = SpeechRecognizer.createSpeechRecognizer(this).apply {
-            setRecognitionListener(object : RecognitionListener {
-                override fun onResults(results: Bundle) {
-                    val matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-                    matches?.get(0)?.let { recognizedText ->
-                        processRecognizedText(recognizedText)
-                    }
-                    stopListening()
-                    startTalkingButton.isEnabled = false
-                    startTalkingButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_light))
-                }
-
-                override fun onReadyForSpeech(params: Bundle) {}
-                override fun onBeginningOfSpeech() {}
-                override fun onRmsChanged(rmsdB: Float) {}
-                override fun onBufferReceived(buffer: ByteArray) {}
-                override fun onEndOfSpeech() {
-                    stopListening()
-                }
-
-                override fun onError(error: Int) {
-                    stopListening()
-                    Toast.makeText(this@MainActivity, getString(R.string.speech_recognition_error, error), Toast.LENGTH_SHORT).show()
-                }
-
-                override fun onPartialResults(partialResults: Bundle) {}
-                override fun onEvent(eventType: Int, params: Bundle) {}
-            })
-        }
-    }
-
     private fun startListening() {
         isListening = true
-        startTalkingButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
-        startTalkingButton.text = getString(R.string.stop_listening)
-        
-        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
-            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
+        startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+        startListeningButton.text = getString(R.string.stop_listening)
+
+        speechRecognitionManager.startListening { recognizedText ->
+            isListening = false
+            startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+            startListeningButton.text = getString(R.string.start_listening)
+
+            if (recognizedText != null) {
+                processRecognizedText(recognizedText)
+            } else {
+                Toast.makeText(this, "Speech recognition failed", Toast.LENGTH_SHORT).show()
+            }
         }
-        speechRecognizer.startListening(intent)
     }
 
     private fun stopListening() {
         isListening = false
-        speechRecognizer.stopListening()
-        startTalkingButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-        startTalkingButton.text = getString(R.string.start_listening)
+        speechRecognitionManager.stopListening()
+        startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+        startListeningButton.text = getString(R.string.start_listening)
     }
 
     private fun checkPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -190,50 +178,61 @@ class MainActivity : Activity() {
 
     private fun processRecognizedText(text: String) {
         val selectedSpeakerId = speakerSpinner.selectedItemPosition
-        Toast.makeText(this, R.string.processing_text, Toast.LENGTH_SHORT).show()
+        Log.d(TAG, "Processing text: $text")
 
-        startTalkingButton.isEnabled = false
-        startTalkingButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
+        startListeningButton.isEnabled = false
+        startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
+        progressBar.visibility = View.VISIBLE
 
         textToAudio.processText(text, selectedSpeakerId, object : TextToAudio.TextToAudioCallback {
             override fun onSuccess(narration: String, status: String, audioData: FloatArray) {
                 runOnUiThread {
-                    Toast.makeText(this@MainActivity, R.string.response_received, Toast.LENGTH_SHORT).show()
+                    Log.d(TAG, "Response received. Status: $status, Narration: $narration")
                     playAudio(audioData)
-                    startTalkingButton.isEnabled = true
-                    startTalkingButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
+                    startListeningButton.isEnabled = true
+                    startListeningButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
+                    progressBar.visibility = View.GONE
                 }
             }
 
             override fun onError(error: String) {
                 runOnUiThread {
-                    Toast.makeText(this@MainActivity, getString(R.string.error_message, error), Toast.LENGTH_LONG).show()
-                    startTalkingButton.isEnabled = true
-                    startTalkingButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
+                    Log.e(TAG, "Error processing text: $error")
+                    startListeningButton.isEnabled = true
+                    startListeningButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
+                    progressBar.visibility = View.GONE
+                    Toast.makeText(this@MainActivity, "Error: $error", Toast.LENGTH_SHORT).show()
                 }
             }
         })
     }
 
     private fun playAudio(audio: FloatArray) {
+        Log.d(TAG, "Playing audio. Length: ${audio.size}")
         val bufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-        AudioTrack.Builder()
-            .setAudioAttributes(AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_MEDIA)
-                .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
-                .build())
-            .setAudioFormat(AudioFormat.Builder()
-                .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                .setSampleRate(SAMPLE_RATE)
-                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                .build())
-            .setBufferSizeInBytes(bufferSize)
-            .build().apply {
-                play()
-                write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
-                stop()
-                release()
-            }
+        try {
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build())
+                .setAudioFormat(AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build())
+                .setBufferSizeInBytes(bufferSize)
+                .build().apply {
+                    setVolume(0.6f) // Set volume to 60%
+                    play()
+                    write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
+                    stop()
+                    release()
+                }
+            Log.d(TAG, "Audio playback completed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing audio: ${e.message}")
+        }
     }
 
     private fun updateBackgroundImage(position: Int) {
@@ -303,7 +302,7 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        speechRecognizer.destroy()
+        speechRecognitionManager.destroy()
         mediaPlayer?.apply {
             stop()
             release()

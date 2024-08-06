@@ -5,12 +5,11 @@ import android.util.Log
 import java.io.IOException
 import ai.onnxruntime.OrtException
 
-class TextToAudio(private val context: Context) {
+class TextToAudio(private val context: Context, private val apiKey: String) {
     companion object {
         private const val TAG = "TextToAudio"
         private const val VITS_MODEL_FILE = "vits_model.onnx"
         private const val PHONEMIZER_MODEL_FILE = "phonemizer_model.onnx"
-        private const val API_KEY_FILE = "gemini_api_key.txt"
 
         // Hardcoded matrix for speaker ID mapping
         private val SPEAKER_ID_MATRIX = arrayOf(
@@ -38,7 +37,6 @@ class TextToAudio(private val context: Context) {
             Phonemizer.initialize(context.assets, PHONEMIZER_MODEL_FILE)
             Log.d(TAG, "Phonemizer initialized")
 
-            val apiKey = loadApiKey()
             apiCall = ApiCall(context, apiKey)
             Log.d(TAG, "ApiCall initialized")
 
@@ -48,15 +46,6 @@ class TextToAudio(private val context: Context) {
         } catch (e: OrtException) {
             Log.e(TAG, "Error initializing models", e)
             throw RuntimeException("Error initializing models: ${e.message}")
-        }
-    }
-
-    private fun loadApiKey(): String {
-        return try {
-            context.assets.open(API_KEY_FILE).bufferedReader().use { it.readText().trim() }
-        } catch (e: IOException) {
-            Log.e(TAG, "Error loading API key", e)
-            throw RuntimeException("Error loading API key: ${e.message}")
         }
     }
 
