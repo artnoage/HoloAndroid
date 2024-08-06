@@ -26,11 +26,38 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintEnd_toEndOf="parent" />
 
+    <androidx.cardview.widget.CardView
+        android:id="@+id/messageBox"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="32dp"
+        android:layout_marginEnd="32dp"
+        app:cardBackgroundColor="#000000"
+        app:cardCornerRadius="8dp"
+        app:cardElevation="4dp"
+        app:layout_constraintBottom_toTopOf="@+id/apiKeyEditText"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintVertical_bias="0.3">
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:padding="16dp"
+            android:text="@string/dramatic_message"
+            android:textAlignment="center"
+            android:textColor="#FF0000"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+    </androidx.cardview.widget.CardView>
+
     <EditText
         android:id="@+id/apiKeyEditText"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:hint="@string/enter_gemini_api_key"
+        android:hint="@string/enter_api_key_optional"
         android:inputType="text"
         android:padding="16dp"
         android:layout_marginStart="32dp"
@@ -48,7 +75,7 @@
         android:id="@+id/proceedButton"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="@string/submit"
+        android:text="@string/proceed"
         android:layout_marginEnd="32dp"
         app:layout_constraintTop_toTopOf="@id/apiKeyEditText"
         app:layout_constraintBottom_toBottomOf="@id/apiKeyEditText"

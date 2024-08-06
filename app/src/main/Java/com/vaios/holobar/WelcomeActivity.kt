@@ -1,12 +1,12 @@
 package com.vaios.holobar
 
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
-import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
@@ -40,13 +40,7 @@ class WelcomeActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        // Check if API key exists in assets and update UI accordingly
-        if (apiKeyExistsInAssets()) {
-            apiKeyEditText.setText(loadApiKeyFromAssets())
-            proceedButton.setText(R.string.proceed)
-        } else {
-            proceedButton.setText(R.string.submit)
-        }
+        proceedButton.setText(R.string.proceed)
     }
 
     private fun validateApiKeyAndProceed() {
@@ -54,17 +48,17 @@ class WelcomeActivity : AppCompatActivity() {
             statusTextView.setText(R.string.validating_api_key)
             proceedButton.isEnabled = false
 
-            val newApiKey = apiKeyEditText.text.toString().trim()
-            val existingApiKey = loadApiKeyFromAssets()
+            val inputApiKey = apiKeyEditText.text.toString().trim()
+            val fileApiKey = loadApiKeyFromFile()
 
             val apiKeyToTest = when {
-                newApiKey.isNotBlank() -> newApiKey
-                existingApiKey.isNotBlank() -> existingApiKey
+                inputApiKey.isNotBlank() -> inputApiKey
+                fileApiKey.isNotBlank() -> fileApiKey
                 else -> ""
             }
 
             if (apiKeyToTest.isEmpty()) {
-                statusTextView.setText(R.string.no_key_provided)
+                statusTextView.setText(R.string.no_key_exists)
                 proceedButton.isEnabled = true
                 return@launch
             }
@@ -74,8 +68,10 @@ class WelcomeActivity : AppCompatActivity() {
             }
 
             if (isValid) {
+                if (inputApiKey.isNotBlank() && inputApiKey != fileApiKey) {
+                    saveApiKeyToFile(inputApiKey)
+                }
                 statusTextView.setText(R.string.response_received)
-                // Proceed to MainActivity
                 val intent = Intent(this@WelcomeActivity, MainActivity::class.java)
                 startActivity(intent)
                 finish()
@@ -86,19 +82,21 @@ class WelcomeActivity : AppCompatActivity() {
         }
     }
 
-    private fun apiKeyExistsInAssets(): Boolean {
-        return try {
-            assets.open("gemini_api_key.txt").use { it.available() > 0 }
-        } catch (e: IOException) {
-            false
-        }
-    }
-
-    private fun loadApiKeyFromAssets(): String {
+    private fun loadApiKeyFromFile(): String {
         return try {
             assets.open("gemini_api_key.txt").bufferedReader().use { it.readText().trim() }
         } catch (e: IOException) {
             ""
+        }
+    }
+
+    private fun saveApiKeyToFile(apiKey: String) {
+        try {
+            openFileOutput("gemini_api_key.txt", Context.MODE_PRIVATE).use {
+                it.write(apiKey.toByteArray())
+            }
+        } catch (e: IOException) {
+            e.printStackTrace()
         }
     }
 
@@ -108,9 +106,9 @@ class WelcomeActivity : AppCompatActivity() {
             val testText = getString(R.string.test_message)
             val latch = CountDownLatch(1)
 
-            val textToAudio = TextToAudio(this@WelcomeActivity, apiKey)
-            textToAudio.processText(testText, 0, object : TextToAudio.TextToAudioCallback {
-                override fun onSuccess(narration: String, status: String, audioData: FloatArray) {
+            val processText = ProcessText(this@WelcomeActivity, apiKey)
+            processText.processTextOnly(testText, 0, object : ProcessText.TextOnlyCallback {
+                override fun onSuccess(narration: String, status: String) {
                     isValid = true
                     latch.countDown()
                 }

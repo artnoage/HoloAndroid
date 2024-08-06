@@ -5,9 +5,9 @@ import android.util.Log
 import java.io.IOException
 import ai.onnxruntime.OrtException
 
-class TextToAudio(private val context: Context, private val apiKey: String) {
+class ProcessText(private val context: Context, private val apiKey: String) {
     companion object {
-        private const val TAG = "TextToAudio"
+        private const val TAG = "ProcessText"
         private const val VITS_MODEL_FILE = "vits_model.onnx"
         private const val PHONEMIZER_MODEL_FILE = "phonemizer_model.onnx"
 
@@ -49,7 +49,7 @@ class TextToAudio(private val context: Context, private val apiKey: String) {
         }
     }
 
-    fun processText(text: String, speakerId: Int, callback: TextToAudioCallback) {
+    fun processText(text: String, speakerId: Int, callback: ProcessTextCallback) {
         Log.d(TAG, "Processing text. Text length: ${text.length}, Speaker ID: $speakerId")
 
         apiCall.sendTextToApi(text, speakerId, object : ApiCall.ApiCallCallback {
@@ -76,6 +76,23 @@ class TextToAudio(private val context: Context, private val apiKey: String) {
         })
     }
 
+    fun processTextOnly(text: String, speakerId: Int, callback: TextOnlyCallback) {
+        Log.d(TAG, "Processing text only. Text length: ${text.length}, Speaker ID: $speakerId")
+
+        apiCall.sendTextToApi(text, speakerId, object : ApiCall.ApiCallCallback {
+            override fun onSuccess(narration: String, status: String) {
+                Log.d(TAG, "API Response received: $narration")
+                Log.d(TAG, "API Status: $status")
+                callback.onSuccess(narration, status)
+            }
+
+            override fun onError(error: String) {
+                Log.e(TAG, "API call error: $error")
+                callback.onError(error)
+            }
+        })
+    }
+
     private fun mapSpeakerId(apiSpeakerId: Int): Int {
         for (mapping in SPEAKER_ID_MATRIX) {
             if (mapping[0] == apiSpeakerId) {
@@ -86,8 +103,13 @@ class TextToAudio(private val context: Context, private val apiKey: String) {
         return SPEAKER_ID_MATRIX[0][1]
     }
 
-    interface TextToAudioCallback {
+    interface ProcessTextCallback {
         fun onSuccess(narration: String, status: String, audioData: FloatArray)
+        fun onError(error: String)
+    }
+
+    interface TextOnlyCallback {
+        fun onSuccess(narration: String, status: String)
         fun onError(error: String)
     }
 }

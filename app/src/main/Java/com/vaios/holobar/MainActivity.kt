@@ -8,6 +8,9 @@ import android.media.AudioFormat
 import android.media.AudioTrack
 import android.media.MediaPlayer
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.text.method.ScrollingMovementMethod
 import android.util.Log
 import android.view.View
 import android.widget.*
@@ -22,12 +25,13 @@ class MainActivity : Activity() {
         private const val SAMPLE_RATE = 22050
     }
 
-    private lateinit var textToAudio: TextToAudio
+    private lateinit var processText: ProcessText
     private lateinit var speakerSpinner: Spinner
     private lateinit var startListeningButton: Button
     private lateinit var backgroundImage: ImageView
     private lateinit var speechRecognitionManager: SpeechRecognitionManager
     private lateinit var progressBar: ProgressBar
+    private lateinit var responseTextView: TextView
 
     private var mediaPlayer: MediaPlayer? = null
     private var currentSongIndex = 0
@@ -54,12 +58,15 @@ class MainActivity : Activity() {
         progressBar = findViewById(R.id.progress_bar)
         textInput = findViewById(R.id.text_input)
         sendTextButton = findViewById(R.id.send_text_button)
+        responseTextView = findViewById(R.id.response_text_view)
+
+        responseTextView.movementMethod = ScrollingMovementMethod()
 
         setupSpeakerSpinner()
         setupButtons()
 
         val apiKey = loadApiKey()
-        textToAudio = TextToAudio(this, apiKey)
+        processText = ProcessText(this, apiKey)
 
         speechRecognitionManager = SpeechRecognitionManager(this)
         initializeMediaPlayer()
@@ -184,11 +191,26 @@ class MainActivity : Activity() {
         startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
         progressBar.visibility = View.VISIBLE
 
-        textToAudio.processText(text, selectedSpeakerId, object : TextToAudio.TextToAudioCallback {
+        // Stop background music
+        mediaPlayer?.pause()
+
+        processText.processText(text, selectedSpeakerId, object : ProcessText.ProcessTextCallback {
             override fun onSuccess(narration: String, status: String, audioData: FloatArray) {
                 runOnUiThread {
                     Log.d(TAG, "Response received. Status: $status, Narration: $narration")
-                    playAudio(audioData)
+
+                    // Start streaming text immediately
+                    streamText(narration)
+
+                    // Play audio in a separate thread
+                    Thread {
+                        playAudio(audioData)
+                        runOnUiThread {
+                            // Resume background music after audio playback
+                            mediaPlayer?.start()
+                        }
+                    }.start()
+
                     startListeningButton.isEnabled = true
                     startListeningButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
                     progressBar.visibility = View.GONE
@@ -202,9 +224,37 @@ class MainActivity : Activity() {
                     startListeningButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
                     progressBar.visibility = View.GONE
                     Toast.makeText(this@MainActivity, "Error: $error", Toast.LENGTH_SHORT).show()
+                    // Resume background music in case of error
+                    mediaPlayer?.start()
                 }
             }
         })
+    }
+
+    private fun streamText(text: String) {
+        responseTextView.visibility = View.VISIBLE
+        responseTextView.text = ""
+
+        val words = text.split(" ")
+        var currentIndex = 0
+
+        val handler = Handler(Looper.getMainLooper())
+        val textStreamer = object : Runnable {
+            override fun run() {
+                if (currentIndex < words.size) {
+                    responseTextView.append(words[currentIndex] + " ")
+                    currentIndex++
+                    handler.postDelayed(this, 100) // Adjust delay as needed
+                } else {
+                    // Schedule hiding the text bubble after 2 seconds
+                    handler.postDelayed({
+                        responseTextView.visibility = View.GONE
+                    }, 2000)
+                }
+            }
+        }
+
+        handler.post(textStreamer)
     }
 
     private fun playAudio(audio: FloatArray) {
