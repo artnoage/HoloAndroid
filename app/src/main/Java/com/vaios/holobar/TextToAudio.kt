@@ -14,11 +14,11 @@ class TextToAudio(private val context: Context) {
 
         // Hardcoded matrix for speaker ID mapping
         private val SPEAKER_ID_MATRIX = arrayOf(
-                intArrayOf(0, 79),
-                intArrayOf(1, 90),
-                intArrayOf(2, 33),
-                intArrayOf(3, 109),
-                intArrayOf(4, 100)
+            intArrayOf(0, 79),
+            intArrayOf(1, 90),
+            intArrayOf(2, 33),
+            intArrayOf(3, 109),
+            intArrayOf(4, 100)
         )
     }
 
@@ -71,7 +71,8 @@ class TextToAudio(private val context: Context) {
                 try {
                     // Map the API speaker ID to the TTS speaker ID
                     val ttsSpeakerId = mapSpeakerId(speakerId)
-                    val responseAudio = synthesizer.tts(narration, ttsSpeakerId)
+                    // Convert Int to Long for the synthesizer
+                    val responseAudio = synthesizer.tts(narration, ttsSpeakerId.toLong())
                     callback.onSuccess(narration, status, responseAudio)
                 } catch (e: Exception) {
                     Log.e(TAG, "Error synthesizing audio response", e)

@@ -8,8 +8,7 @@
     <string name="history_delete_failed">Failed to delete history file</string>
     <string name="history_file_not_exist">History file does not exist</string>
     <string name="speech_recognition_error">Error in speech recognition: %1$d</string>
-    <string name="stop_listening">Stop Listening</string>
-    <string name="start_listening">Start Listening</string>
+    <string name="start_talking">Talk</string>
     <string name="processing_text">Processing text…</string>
     <string name="response_received">Response received, playing audio…</string>
     <string name="error_message">Error: %1$s</string>
@@ -21,4 +20,6 @@
     <string name="welcome_background_image_description">Welcome background image</string>
     <string name="enter_your_name">Enter your name</string>
     <string name="submit">OK</string>
+    <string name="start_listening">Start Listening</string>
+    <string name="stop_listening">Stop Listening</string>
 </resources>

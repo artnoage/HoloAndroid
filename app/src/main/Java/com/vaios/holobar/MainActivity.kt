@@ -27,18 +27,19 @@ class MainActivity : Activity() {
         private const val SAMPLE_RATE = 22050
     }
 
-    private lateinit var audioToAudio: TextToAudio
+    private lateinit var textToAudio: TextToAudio
     private lateinit var speakerSpinner: Spinner
-    private lateinit var recordButton: Button
+    private lateinit var startTalkingButton: Button
     private lateinit var backgroundImage: ImageView
     private lateinit var speechRecognizer: SpeechRecognizer
-    private var isListening = false
 
     private var mediaPlayer: MediaPlayer? = null
     private var currentSongIndex = 0
     private val songs = intArrayOf(R.raw.song1, R.raw.song2, R.raw.song3, R.raw.song4)
     private lateinit var nextSongButton: Button
     private lateinit var restartButton: Button
+
+    private var isListening = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -47,7 +48,7 @@ class MainActivity : Activity() {
         Log.d(TAG, "onCreate: Initializing MainActivity")
 
         speakerSpinner = findViewById(R.id.speaker_spinner)
-        recordButton = findViewById(R.id.record_button)
+        startTalkingButton = findViewById(R.id.start_talking_button)
         backgroundImage = findViewById(R.id.background_image)
         nextSongButton = findViewById(R.id.next_song_button)
         restartButton = findViewById(R.id.restart_button)
@@ -56,7 +57,7 @@ class MainActivity : Activity() {
         setupButtons()
 
         try {
-            audioToAudio = TextToAudio(this)
+            textToAudio = TextToAudio(this)
         } catch (e: RuntimeException) {
             Toast.makeText(this, e.message, Toast.LENGTH_LONG).show()
             finish()
@@ -89,9 +90,13 @@ class MainActivity : Activity() {
     }
 
     private fun setupButtons() {
-        recordButton.setOnClickListener {
+        startTalkingButton.setOnClickListener {
             if (checkPermission()) {
-                toggleListening()
+                if (!isListening) {
+                    startListening()
+                } else {
+                    stopListening()
+                }
             } else {
                 requestPermission()
             }
@@ -132,6 +137,9 @@ class MainActivity : Activity() {
                     matches?.get(0)?.let { recognizedText ->
                         processRecognizedText(recognizedText)
                     }
+                    stopListening()
+                    startTalkingButton.isEnabled = false
+                    startTalkingButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.holo_red_light))
                 }
 
                 override fun onReadyForSpeech(params: Bundle) {}
@@ -139,13 +147,11 @@ class MainActivity : Activity() {
                 override fun onRmsChanged(rmsdB: Float) {}
                 override fun onBufferReceived(buffer: ByteArray) {}
                 override fun onEndOfSpeech() {
-                    isListening = false
-                    updateRecordButtonUI()
+                    stopListening()
                 }
 
                 override fun onError(error: Int) {
-                    isListening = false
-                    updateRecordButtonUI()
+                    stopListening()
                     Toast.makeText(this@MainActivity, getString(R.string.speech_recognition_error, error), Toast.LENGTH_SHORT).show()
                 }
 
@@ -155,30 +161,25 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun toggleListening() {
-        if (!isListening) startListening() else stopListening()
-    }
-
     private fun startListening() {
+        isListening = true
+        startTalkingButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
+        startTalkingButton.text = getString(R.string.stop_listening)
+        
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
             putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
             putExtra(RecognizerIntent.EXTRA_LANGUAGE, Locale.getDefault())
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
+            putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 1500)
         }
         speechRecognizer.startListening(intent)
-        isListening = true
-        updateRecordButtonUI()
     }
 
     private fun stopListening() {
-        speechRecognizer.stopListening()
         isListening = false
-        updateRecordButtonUI()
-    }
-
-    private fun updateRecordButtonUI() {
-        runOnUiThread {
-            recordButton.text = getString(if (isListening) R.string.stop_listening else R.string.start_listening)
-        }
+        speechRecognizer.stopListening()
+        startTalkingButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+        startTalkingButton.text = getString(R.string.start_listening)
     }
 
     private fun checkPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -191,21 +192,24 @@ class MainActivity : Activity() {
         val selectedSpeakerId = speakerSpinner.selectedItemPosition
         Toast.makeText(this, R.string.processing_text, Toast.LENGTH_SHORT).show()
 
-        recordButton.isEnabled = false
+        startTalkingButton.isEnabled = false
+        startTalkingButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
 
-        audioToAudio.processText(text, selectedSpeakerId, object : TextToAudio.TextToAudioCallback {
+        textToAudio.processText(text, selectedSpeakerId, object : TextToAudio.TextToAudioCallback {
             override fun onSuccess(narration: String, status: String, audioData: FloatArray) {
                 runOnUiThread {
                     Toast.makeText(this@MainActivity, R.string.response_received, Toast.LENGTH_SHORT).show()
                     playAudio(audioData)
-                    recordButton.isEnabled = true
+                    startTalkingButton.isEnabled = true
+                    startTalkingButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
                 }
             }
 
             override fun onError(error: String) {
                 runOnUiThread {
                     Toast.makeText(this@MainActivity, getString(R.string.error_message, error), Toast.LENGTH_LONG).show()
-                    recordButton.isEnabled = true
+                    startTalkingButton.isEnabled = true
+                    startTalkingButton.setBackgroundColor(ContextCompat.getColor(this@MainActivity, android.R.color.darker_gray))
                 }
             }
         })
@@ -266,7 +270,7 @@ class MainActivity : Activity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "Record audio permission granted")
                 Toast.makeText(this, R.string.record_permission_granted, Toast.LENGTH_SHORT).show()
-                toggleListening()
+                startListening()
             } else {
                 Log.w(TAG, "Record audio permission denied")
                 Toast.makeText(this, R.string.record_permission_required, Toast.LENGTH_LONG).show()
