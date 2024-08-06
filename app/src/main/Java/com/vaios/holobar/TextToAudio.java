@@ -17,11 +17,11 @@ public class TextToAudio {
 
     // Hardcoded matrix for speaker ID mapping
     private static final int[][] SPEAKER_ID_MATRIX = {
-            {0, 104},
-            {1, 105},
-            {2, 106},
-            {3, 107},
-            {4, 108}
+            {0, 79},
+            {1, 90},
+            {2, 33},
+            {3, 109},
+            {4, 100}
     };
 
     public TextToAudio(Context context) {
