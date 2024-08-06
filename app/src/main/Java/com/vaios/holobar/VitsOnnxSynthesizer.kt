@@ -6,10 +6,19 @@ import android.util.Log
 import java.io.ByteArrayOutputStream
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
+import kotlin.math.max
+import kotlin.math.min
 
 class VitsOnnxSynthesizer(context: Context, modelFileName: String) : AutoCloseable {
     companion object {
         private const val TAG = "VitsOnnxSynthesizer"
+
+        // Function to calculate optimal thread count
+        private fun calculateOptimalThreads(): Int {
+            val availableProcessors = Runtime.getRuntime().availableProcessors()
+            // Use 75% of available cores, but at least 1 and at most 4
+            return min(max(1, (availableProcessors * 0.75).toInt()), 4)
+        }
     }
 
     private val tokenizer: Tokenizer = Tokenizer(context)
@@ -20,7 +29,7 @@ class VitsOnnxSynthesizer(context: Context, modelFileName: String) : AutoCloseab
         val modelBytes = readBytesFromAsset(context, modelFileName)
         val sessionOptions = OrtSession.SessionOptions().apply {
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-            setIntraOpNumThreads(2)
+            setIntraOpNumThreads(calculateOptimalThreads())
         }
         session = env.createSession(modelBytes, sessionOptions)
     }
@@ -37,7 +46,7 @@ class VitsOnnxSynthesizer(context: Context, modelFileName: String) : AutoCloseab
         val inputs = tokenizer.textToIds(text)
         val inputArray = inputs.map { it.toLong() }.toLongArray()
         val inputLengths = longArrayOf(inputArray.size.toLong())
-        val scales = floatArrayOf(0.667f, 1.0f, 0.8f)
+        val scales = floatArrayOf(0.667f, 1.3f, 0.8f)
         val sid = longArrayOf(speakerId)
 
         val tensors = mapOf(

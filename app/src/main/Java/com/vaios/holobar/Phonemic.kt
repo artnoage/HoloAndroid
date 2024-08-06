@@ -6,6 +6,8 @@ import java.io.InputStream
 import java.io.ByteArrayOutputStream
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.max
+import kotlin.math.min
 
 class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
     private val maxSeqLen: Int = config.getProperty("max_seq_len").toInt()
@@ -13,6 +15,7 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
     private val languageCodeEn: String = config.getProperty("language_code_en")
     private val endToken: String = config.getProperty("end_token")
     private val cache: MutableMap<String, List<Int>> = ConcurrentHashMap()
+    private val paddedInput = Array(1) { LongArray(maxSeqLen) }
 
     companion object {
         private lateinit var env: OrtEnvironment
@@ -23,7 +26,11 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
             env = OrtEnvironment.getEnvironment()
             assetManager.open(modelFileName).use { modelStream ->
                 val modelBytes = readInputStream(modelStream)
-                session = env.createSession(modelBytes, OrtSession.SessionOptions())
+                val sessionOptions = OrtSession.SessionOptions().apply {
+                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                    setIntraOpNumThreads(calculateOptimalThreads())
+                }
+                session = env.createSession(modelBytes, sessionOptions)
             }
         }
 
@@ -33,6 +40,10 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
             return buffer.toByteArray()
         }
 
+        private fun calculateOptimalThreads(): Int {
+            val availableProcessors = Runtime.getRuntime().availableProcessors()
+            return min(max(1, (availableProcessors * 0.75).toInt()), 4)
+        }
     }
 
     private fun tokenize(word: String): List<Int> {
@@ -50,14 +61,10 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
         return tokens
     }
 
-    private fun addThrees(phonemeList: List<Int>): List<Int> {
-        return phonemeList.flatMap { listOf(3, it) } + 3
-    }
-
     fun infer(sentence: String): List<Int> {
         val words = sentence.split("\\s+".toRegex())
         val wordOutputs = words.map { inferWord(it) }
-        return combineWordOutputs(wordOutputs)
+        return addThrees(combineWordOutputs(wordOutputs))
     }
 
     private fun inferWord(word: String): List<Int> {
@@ -68,32 +75,44 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
     }
 
     private fun runOnnxInference(tokenizedWord: List<Int>): List<Int> {
-        val paddedInput = Array(1) { LongArray(maxSeqLen) }
-        tokenizedWord.forEachIndexed { index, token ->
-            paddedInput[0][index] = token.toLong()
+        synchronized(paddedInput) {
+            paddedInput[0].fill(0) // Clear previous data
+            tokenizedWord.forEachIndexed { index, token ->
+                paddedInput[0][index] = token.toLong()
+            }
         }
 
         try {
             val inputTensor = OnnxTensor.createTensor(env, paddedInput)
             val result = session.run(mapOf("input" to inputTensor))
-            when (val rawOutput = result.get(0).value) {
-                is Array<*> -> {
-                    if (rawOutput.isNotEmpty() && rawOutput[0] is Array<*>) {
-                        val firstElement = rawOutput[0] as? Array<*>
-                        if (firstElement != null && firstElement.isNotEmpty() && firstElement[0] is FloatArray) {
-                            val typedOutput = rawOutput as Array<Array<FloatArray>>
-                            return typedOutput[0].drop(1)
-                                .takeWhile { it.maxOrNull()!! > it[3] }
-                                .map { it.indices.maxByOrNull { i -> it[i] }!! }
-                                .filter { it != 0 }
-                        }
-                    }
-                }
+            val outputTensor = result.get(0)
+
+            return when (val value = outputTensor.value) {
+                is Array<*> -> processOutputArray(value)
+                else -> throw PhonemizerInferenceException("Unexpected output type from ONNX model: ${value?.javaClass?.name}")
             }
-            throw PhonemizerInferenceException("Unexpected output type from ONNX model")
         } catch (e: OrtException) {
             throw PhonemizerInferenceException("Failed to run ONNX inference", e)
         }
+    }
+
+    private fun processOutputArray(outputArray: Array<*>): List<Int> {
+        if (outputArray.isEmpty() || outputArray[0] !is Array<*>) {
+            throw PhonemizerInferenceException("Unexpected output array structure")
+        }
+
+        val firstElement = outputArray[0] as Array<*>
+        if (firstElement.isEmpty() || firstElement[0] !is FloatArray) {
+            throw PhonemizerInferenceException("Unexpected inner array type")
+        }
+
+        return firstElement.asSequence()
+            .drop(1)
+            .map { it as FloatArray }
+            .takeWhile { it.maxOrNull()!! > it[3] }
+            .map { it.indices.maxByOrNull { i -> it[i] }!! }
+            .filter { it != 0 }
+            .toList()
     }
 
     private fun combineWordOutputs(wordOutputs: List<List<Int>>): List<Int> {
@@ -101,14 +120,16 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
             if (index > 0) listOf(2) + output else output
         }
 
-        val outputWithoutDuplicates = combinedOutput.fold(mutableListOf<Int>()) { acc, value ->
+        return combinedOutput.fold(mutableListOf()) { acc, value ->
             if (acc.isEmpty() || value != acc.last() || value == 2) {
                 acc.add(value)
             }
             acc
         }
+    }
 
-        return addThrees(outputWithoutDuplicates)
+    private fun addThrees(phonemeList: List<Int>): List<Int> {
+        return phonemeList.flatMap { listOf(3, it) } + 3
     }
 
     class PhonemizerInferenceException : RuntimeException {
