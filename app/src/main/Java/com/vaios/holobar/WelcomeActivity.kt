@@ -107,8 +107,8 @@ class WelcomeActivity : AppCompatActivity() {
             val latch = CountDownLatch(1)
 
             val processText = ProcessText(this@WelcomeActivity, apiKey)
-            processText.processTextOnly(testText, 0, object : ProcessText.TextOnlyCallback {
-                override fun onSuccess(narration: String, status: String) {
+            processText.processText(testText, 0, object : ProcessText.ProcessTextCallback {
+                override fun onPieceReady(text: String, audioData: FloatArray, isLastPiece: Boolean) {
                     isValid = true
                     latch.countDown()
                 }
@@ -117,6 +117,9 @@ class WelcomeActivity : AppCompatActivity() {
                     isValid = false
                     latch.countDown()
                 }
+
+
+
             })
 
             latch.await()
