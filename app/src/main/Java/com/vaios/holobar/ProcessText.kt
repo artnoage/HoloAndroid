@@ -54,20 +54,6 @@ class ProcessText(private val context: Context, private val apiKey: String) {
         }
     }
 
-    fun sendTextToApi(text: String, speakerId: Int, callback: ProcessTextCallback) {
-        apiCall.sendTextToApi(text, speakerId, object : ApiCall.ChatApiCallback {
-            override fun onSuccess(narration: String, status: String) {
-                Log.d(TAG, "API Response received: $narration")
-                Log.d(TAG, "API Status: $status")
-                callback.onSuccess(narration)
-            }
-
-            override fun onError(error: String) {
-                Log.e(TAG, "API call error: $error")
-                callback.onError(error)
-            }
-        })
-    }
 
     fun splitText(text: String): List<String> {
         // If the text is short enough, return it as a single piece
@@ -117,8 +103,4 @@ class ProcessText(private val context: Context, private val apiKey: String) {
         return SPEAKER_ID_MATRIX[0][1]
     }
 
-    interface ProcessTextCallback {
-        fun onSuccess(narration: String)
-        fun onError(error: String)
-    }
 }

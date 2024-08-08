@@ -3,10 +3,7 @@ package com.vaios.holobar
 import android.Manifest
 import android.app.Activity
 import android.content.pm.PackageManager
-import android.media.AudioAttributes
-import android.media.AudioFormat
-import android.media.AudioTrack
-import android.media.MediaPlayer
+import android.media.*
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -15,34 +12,191 @@ import android.view.View
 import android.widget.*
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import java.io.ByteArrayOutputStream
 import java.io.File
+
 
 class MainActivity : Activity() {
     companion object {
         private const val TAG = "MainActivity"
         private const val REQUEST_RECORD_AUDIO_PERMISSION = 200
         private const val SAMPLE_RATE = 22050
+        private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
+        private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
+        private const val DEBUG_MODE = true // Set to false in production
     }
 
-    private lateinit var processText: ProcessText
-    private lateinit var speakerSpinner: Spinner
-    private lateinit var startListeningButton: Button
-    private lateinit var backgroundImage: ImageView
-    private lateinit var speechRecognitionManager: SpeechRecognitionManager
-    private lateinit var progressBar: ProgressBar
-    private lateinit var scrollView: ScrollView
-    private lateinit var responseContainer: LinearLayout
+    private var audioRecord: AudioRecord? = null
+    private var recordingThread: Thread? = null
+    private var isRecording = false
+    private var recordedAudioData: ByteArray? = null
 
     private var mediaPlayer: MediaPlayer? = null
     private var currentSongIndex = 0
     private val songs = intArrayOf(R.raw.song1, R.raw.song2, R.raw.song3, R.raw.song4)
+
+    private fun startRecording() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_RECORD_AUDIO_PERMISSION)
+            return
+        }
+
+        val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+        audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
+
+        if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
+            Log.e(TAG, "AudioRecord failed to initialize")
+            return
+        }
+
+        audioRecord?.startRecording()
+        isRecording = true
+
+        recordingThread = Thread {
+            val buffer = ByteArray(bufferSize)
+            val output = ByteArrayOutputStream()
+
+            while (isRecording) {
+                val read = audioRecord?.read(buffer, 0, bufferSize) ?: -1
+                if (read > 0) {
+                    output.write(buffer, 0, read)
+                }
+            }
+
+            recordedAudioData = output.toByteArray()
+            Log.d(TAG, "Recording finished. Bytes recorded: ${recordedAudioData?.size}")
+
+            runOnUiThread {
+                if (DEBUG_MODE) {
+                    playDebugAudio()
+                } else {
+                    processInput(recordedAudioData!!)
+                }
+            }
+        }
+        recordingThread?.start()
+
+        startListeningButton.text = getString(R.string.stop_talking)
+        Log.d(TAG, "Recording started")
+    }
+
+    private fun stopRecording() {
+        isRecording = false
+        audioRecord?.stop()
+        audioRecord?.release()
+        audioRecord = null
+        recordingThread?.join()
+        recordingThread = null
+        startListeningButton.text = getString(R.string.start_talking)
+        Log.d(TAG, "Recording stopped")
+    }
+
+    private fun playDebugAudio() {
+        recordedAudioData?.let { audioData ->
+            Log.d(TAG, "Playing debug audio. Size: ${audioData.size} bytes")
+
+            try {
+                val audioTrack = AudioTrack.Builder()
+                    .setAudioAttributes(AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build())
+                    .setAudioFormat(AudioFormat.Builder()
+                        .setEncoding(AUDIO_FORMAT)
+                        .setSampleRate(SAMPLE_RATE)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build())
+                    .setBufferSizeInBytes(audioData.size)
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .build()
+
+                audioTrack.write(audioData, 0, audioData.size)
+                audioTrack.play()
+
+                // Wait for playback to finish
+                Thread {
+                    Thread.sleep(audioData.size * 1000L / (SAMPLE_RATE * 2))
+                    audioTrack.release()
+                    runOnUiThread {
+                        Toast.makeText(this, "Debug audio playback finished", Toast.LENGTH_SHORT).show()
+                        processInput(audioData)
+                    }
+                }.start()
+            } catch (e: Exception) {
+                Log.e(TAG, "Error playing debug audio", e)
+                Toast.makeText(this, "Error playing debug audio: ${e.message}", Toast.LENGTH_SHORT).show()
+            }
+        } ?: run {
+            Log.e(TAG, "No audio data to play")
+            Toast.makeText(this, "No audio data to play", Toast.LENGTH_SHORT).show()
+        }
+    }
+
+
+    private fun playAudio(audio: FloatArray) {
+        Log.d(TAG, "Playing audio. Length: ${audio.size}")
+        val bufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
+        try {
+            AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build())
+                .setAudioFormat(AudioFormat.Builder()
+                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build())
+                .setBufferSizeInBytes(bufferSize)
+                .build().apply {
+                    setVolume(0.8f)
+                    play()
+                    write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
+                    stop()
+                    release()
+                }
+            Log.d(TAG, "Audio playback completed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error playing audio: ${e.message}")
+        }
+    }
+
+    private fun initializeMediaPlayer() {
+        mediaPlayer = MediaPlayer.create(this, songs[currentSongIndex]).apply {
+            isLooping = true
+            setVolume(0.1f, 0.1f)
+            start()
+            setOnCompletionListener { playNextSong() }
+        }
+    }
+
+    private fun playNextSong() {
+        mediaPlayer?.apply {
+            stop()
+            release()
+        }
+
+        currentSongIndex = (currentSongIndex + 1) % songs.size
+        mediaPlayer = MediaPlayer.create(this, songs[currentSongIndex]).apply {
+            isLooping = true
+            setVolume(0.1f, 0.1f)
+            start()
+        }
+    }
+
+    // Other properties
+    private lateinit var processText: ProcessText
+    private lateinit var apiCall: ApiCall
+    private lateinit var speakerSpinner: Spinner
+    private lateinit var startListeningButton: Button
+    private lateinit var backgroundImage: ImageView
+    private lateinit var progressBar: ProgressBar
+    private lateinit var scrollView: ScrollView
+    private lateinit var responseContainer: LinearLayout
     private lateinit var nextSongButton: Button
     private lateinit var restartButton: Button
-
     private lateinit var textInput: EditText
     private lateinit var sendTextButton: Button
-
-    private var isListening = false
 
     private var firstPieceFinished = false
     private var secondPieceAudio: FloatArray? = null
@@ -59,9 +213,9 @@ class MainActivity : Activity() {
         setupButtons()
 
         val apiKey = intent.getStringExtra("API_KEY") ?: loadApiKey()
+        apiCall = ApiCall(this, apiKey)
         processText = ProcessText(this, apiKey)
 
-        speechRecognitionManager = SpeechRecognitionManager(this)
         initializeMediaPlayer()
     }
 
@@ -111,10 +265,10 @@ class MainActivity : Activity() {
     private fun setupButtons() {
         startListeningButton.setOnClickListener {
             if (checkPermission()) {
-                if (!isListening) {
-                    startListening()
+                if (!isRecording) {
+                    startRecording()
                 } else {
-                    stopListening()
+                    stopRecording()
                 }
             } else {
                 requestPermission()
@@ -127,7 +281,7 @@ class MainActivity : Activity() {
         sendTextButton.setOnClickListener {
             val text = textInput.text.toString()
             if (text.isNotEmpty()) {
-                processRecognizedText(text)
+                processInput(text)
                 textInput.text.clear()
             } else {
                 Toast.makeText(this, "Please enter some text", Toast.LENGTH_SHORT).show()
@@ -135,66 +289,29 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun initializeMediaPlayer() {
-        mediaPlayer = MediaPlayer.create(this, songs[currentSongIndex]).apply {
-            isLooping = true
-            setVolume(0.1f, 0.1f)
-            start()
-            setOnCompletionListener { playNextSong() }
-        }
-    }
-
-    private fun playNextSong() {
-        mediaPlayer?.apply {
-            stop()
-            release()
-        }
-
-        currentSongIndex = (currentSongIndex + 1) % songs.size
-        mediaPlayer = MediaPlayer.create(this, songs[currentSongIndex]).apply {
-            isLooping = true
-            setVolume(0.1f, 0.1f)
-            start()
-        }
-    }
-
-    private fun startListening() {
-        isListening = true
-        startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
-        startListeningButton.text = getString(R.string.stop_listening)
-
-        speechRecognitionManager.startListening { recognizedText ->
-            isListening = false
-            startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-            startListeningButton.text = getString(R.string.start_listening)
-
-            if (recognizedText != null) {
-                processRecognizedText(recognizedText)
-            } else {
-                Toast.makeText(this, "Speech recognition failed", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
-    private fun stopListening() {
-        isListening = false
-        speechRecognitionManager.stopListening()
-        startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-        startListeningButton.text = getString(R.string.start_listening)
-    }
-
-    private fun processRecognizedText(text: String) {
+    private fun processInput(input: Any) {
         val selectedSpeakerId = speakerSpinner.selectedItemPosition
-        Log.d(TAG, "Processing text: $text")
+        val isAudio = input is ByteArray
 
-        disableInputs()
-        progressBar.visibility = View.VISIBLE
+        if (isAudio) {
+            Log.d(TAG, "Processing audio. Size: ${(input as ByteArray).size} bytes")
+        } else {
+            Log.d(TAG, "Processing text: $input")
+        }
+
+        runOnUiThread {
+            disableInputs()
+            progressBar.visibility = View.VISIBLE
+        }
         mediaPlayer?.pause()
 
-        processText.sendTextToApi(text, selectedSpeakerId, object : ProcessText.ProcessTextCallback {
-            override fun onSuccess(narration: String) {
-                textPieces = processText.splitText(narration)
-                processTextPieces(selectedSpeakerId)
+        val apiCallback = object : ApiCall.ChatApiCallback {
+            override fun onSuccess(narration: String, status: String) {
+                runOnUiThread {
+                    textPieces = processText.splitText(narration)
+                    processTextPieces(selectedSpeakerId)
+                    Log.d(TAG, "API Status: $status")
+                }
             }
 
             override fun onError(error: String) {
@@ -205,7 +322,13 @@ class MainActivity : Activity() {
                     mediaPlayer?.start()
                 }
             }
-        })
+        }
+
+        if (isAudio) {
+            apiCall.speakToAgents(input as ByteArray, selectedSpeakerId, apiCallback)
+        } else {
+            apiCall.talkToAgents(input as String, selectedSpeakerId, apiCallback)
+        }
     }
 
     private fun processTextPieces(speakerId: Int) {
@@ -230,15 +353,6 @@ class MainActivity : Activity() {
         }
     }
 
-    private fun playSecondPieceIfReady() {
-        secondPieceAudio?.let { audioData ->
-            if (firstPieceFinished && textPieces.size > 1) {
-                playAudioAndStreamText(textPieces[1], audioData, true)
-                secondPieceAudio = null
-            }
-        }
-    }
-
     private fun playAudioAndStreamText(text: String, audioData: FloatArray, isLastPiece: Boolean) {
         val responseTextView = createNewResponseTextView()
         streamText(text, responseTextView)
@@ -258,31 +372,12 @@ class MainActivity : Activity() {
         }.start()
     }
 
-    private fun playAudio(audio: FloatArray) {
-        Log.d(TAG, "Playing audio. Length: ${audio.size}")
-        val bufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-        try {
-            AudioTrack.Builder()
-                .setAudioAttributes(AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build())
-                .setAudioFormat(AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build())
-                .setBufferSizeInBytes(bufferSize)
-                .build().apply {
-                    setVolume(0.8f)
-                    play()
-                    write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
-                    stop()
-                    release()
-                }
-            Log.d(TAG, "Audio playback completed")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error playing audio: ${e.message}")
+    private fun playSecondPieceIfReady() {
+        secondPieceAudio?.let { audioData ->
+            if (firstPieceFinished && textPieces.size > 1) {
+                playAudioAndStreamText(textPieces[1], audioData, true)
+                secondPieceAudio = null
+            }
         }
     }
 
@@ -300,7 +395,6 @@ class MainActivity : Activity() {
 
     private fun streamText(text: String, textView: TextView) {
         textView.text = ""
-
         val words = text.split(" ")
         var currentIndex = 0
 
@@ -315,7 +409,6 @@ class MainActivity : Activity() {
                 }
             }
         }
-
         handler.post(textStreamer)
     }
 
@@ -348,17 +441,21 @@ class MainActivity : Activity() {
     }
 
     private fun disableInputs() {
-        startListeningButton.isEnabled = false
-        speakerSpinner.isEnabled = false
-        textInput.isEnabled = false
-        sendTextButton.isEnabled = false
+        runOnUiThread {
+            startListeningButton.isEnabled = false
+            speakerSpinner.isEnabled = false
+            textInput.isEnabled = false
+            sendTextButton.isEnabled = false
+        }
     }
 
     private fun enableInputs() {
-        startListeningButton.isEnabled = true
-        speakerSpinner.isEnabled = true
-        textInput.isEnabled = true
-        sendTextButton.isEnabled = true
+        runOnUiThread {
+            startListeningButton.isEnabled = true
+            speakerSpinner.isEnabled = true
+            textInput.isEnabled = true
+            sendTextButton.isEnabled = true
+        }
     }
 
     private fun checkPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -373,7 +470,7 @@ class MainActivity : Activity() {
             if (grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
                 Log.d(TAG, "Record audio permission granted")
                 Toast.makeText(this, R.string.record_permission_granted, Toast.LENGTH_SHORT).show()
-                startListening()
+                startRecording()
             } else {
                 Log.w(TAG, "Record audio permission denied")
                 Toast.makeText(this, R.string.record_permission_required, Toast.LENGTH_LONG).show()
@@ -384,6 +481,9 @@ class MainActivity : Activity() {
     override fun onPause() {
         super.onPause()
         mediaPlayer?.pause()
+        if (isRecording) {
+            stopRecording()
+        }
     }
 
     override fun onResume() {
@@ -402,15 +502,20 @@ class MainActivity : Activity() {
             release()
         }
         mediaPlayer = null
+        if (isRecording) {
+            stopRecording()
+        }
     }
 
     override fun onDestroy() {
         super.onDestroy()
-        speechRecognitionManager.destroy()
         mediaPlayer?.apply {
             stop()
             release()
         }
         mediaPlayer = null
+        if (isRecording) {
+            stopRecording()
+        }
     }
 }

@@ -12,6 +12,7 @@ import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import android.util.Log
+import java.io.IOException
 
 class WelcomeActivity : AppCompatActivity() {
 
@@ -58,9 +59,11 @@ class WelcomeActivity : AppCompatActivity() {
 
             val inputApiKey = apiKeyEditText.text.toString().trim()
             val savedApiKey = loadApiKey()
+            val assetApiKey = loadApiKeyFromAssets()
 
             val apiKeyToTest = when {
                 inputApiKey.isNotBlank() -> inputApiKey
+                assetApiKey.isNotBlank() -> assetApiKey
                 savedApiKey.isNotBlank() -> savedApiKey
                 else -> ""
             }
@@ -99,6 +102,15 @@ class WelcomeActivity : AppCompatActivity() {
     private fun loadApiKey(): String {
         val sharedPref = getSharedPreferences("ApiKeyPref", Context.MODE_PRIVATE)
         return sharedPref.getString("api_key", "") ?: ""
+    }
+
+    private fun loadApiKeyFromAssets(): String {
+        return try {
+            assets.open("key.txt").bufferedReader().use { it.readText().trim() }
+        } catch (e: IOException) {
+            Log.d("WelcomeActivity", "No key.txt found in assets or error reading it: ${e.message}")
+            ""
+        }
     }
 
     private fun saveApiKey(apiKey: String) {
