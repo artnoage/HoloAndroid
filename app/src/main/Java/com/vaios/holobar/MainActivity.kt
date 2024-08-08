@@ -44,8 +44,9 @@ class MainActivity : Activity() {
 
     private var isListening = false
 
-    private var currentAudioData: FloatArray? = null
-    private var nextAudioData: FloatArray? = null
+    private var firstPieceFinished = false
+    private var secondPieceAudio: FloatArray? = null
+    private var textPieces: List<String> = listOf()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -57,7 +58,7 @@ class MainActivity : Activity() {
         setupSpeakerSpinner()
         setupButtons()
 
-        val apiKey = loadApiKey()
+        val apiKey = intent.getStringExtra("API_KEY") ?: loadApiKey()
         processText = ProcessText(this, apiKey)
 
         speechRecognitionManager = SpeechRecognitionManager(this)
@@ -182,12 +183,6 @@ class MainActivity : Activity() {
         startListeningButton.text = getString(R.string.start_listening)
     }
 
-    private fun checkPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-
-    private fun requestPermission() {
-        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_RECORD_AUDIO_PERMISSION)
-    }
-
     private fun processRecognizedText(text: String) {
         val selectedSpeakerId = speakerSpinner.selectedItemPosition
         Log.d(TAG, "Processing text: $text")
@@ -196,23 +191,10 @@ class MainActivity : Activity() {
         progressBar.visibility = View.VISIBLE
         mediaPlayer?.pause()
 
-        processText.processText(text, selectedSpeakerId, object : ProcessText.ProcessTextCallback {
-            override fun onPieceReady(text: String, audioData: FloatArray, isLastPiece: Boolean) {
-                runOnUiThread {
-                    val responseTextView = createNewResponseTextView()
-                    streamText(text, responseTextView)
-
-                    if (currentAudioData == null) {
-                        currentAudioData = audioData
-                        playCurrentAudio()
-                    } else {
-                        nextAudioData = audioData
-                    }
-
-                    if (isLastPiece) {
-                        progressBar.visibility = View.GONE
-                    }
-                }
+        processText.sendTextToApi(text, selectedSpeakerId, object : ProcessText.ProcessTextCallback {
+            override fun onSuccess(narration: String) {
+                textPieces = processText.splitText(narration)
+                processTextPieces(selectedSpeakerId)
             }
 
             override fun onError(error: String) {
@@ -226,23 +208,54 @@ class MainActivity : Activity() {
         })
     }
 
-    private fun playCurrentAudio() {
-        currentAudioData?.let { audioData ->
-            Thread {
-                playAudio(audioData)
-                runOnUiThread {
-                    if (nextAudioData != null) {
-                        currentAudioData = nextAudioData
-                        nextAudioData = null
-                        playCurrentAudio()
-                    } else {
-                        currentAudioData = null
-                        enableInputs()
-                        mediaPlayer?.start()
+    private fun processTextPieces(speakerId: Int) {
+        firstPieceFinished = false
+        secondPieceAudio = null
+
+        // Process first piece
+        processText.synthesizeAudio(textPieces[0], speakerId) { audioData ->
+            runOnUiThread {
+                playAudioAndStreamText(textPieces[0], audioData, textPieces.size == 1)
+
+                // Start processing second piece immediately if it exists
+                if (textPieces.size > 1) {
+                    processText.synthesizeAudio(textPieces[1], speakerId) { secondAudioData ->
+                        runOnUiThread {
+                            secondPieceAudio = secondAudioData
+                            playSecondPieceIfReady()
+                        }
                     }
                 }
-            }.start()
+            }
         }
+    }
+
+    private fun playSecondPieceIfReady() {
+        secondPieceAudio?.let { audioData ->
+            if (firstPieceFinished && textPieces.size > 1) {
+                playAudioAndStreamText(textPieces[1], audioData, true)
+                secondPieceAudio = null
+            }
+        }
+    }
+
+    private fun playAudioAndStreamText(text: String, audioData: FloatArray, isLastPiece: Boolean) {
+        val responseTextView = createNewResponseTextView()
+        streamText(text, responseTextView)
+
+        Thread {
+            playAudio(audioData)
+            runOnUiThread {
+                if (isLastPiece) {
+                    enableInputs()
+                    progressBar.visibility = View.GONE
+                    mediaPlayer?.start()
+                } else {
+                    firstPieceFinished = true
+                    playSecondPieceIfReady()
+                }
+            }
+        }.start()
     }
 
     private fun playAudio(audio: FloatArray) {
@@ -261,7 +274,7 @@ class MainActivity : Activity() {
                     .build())
                 .setBufferSizeInBytes(bufferSize)
                 .build().apply {
-                    setVolume(0.6f)
+                    setVolume(0.8f)
                     play()
                     write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
                     stop()
@@ -346,6 +359,12 @@ class MainActivity : Activity() {
         speakerSpinner.isEnabled = true
         textInput.isEnabled = true
         sendTextButton.isEnabled = true
+    }
+
+    private fun checkPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    private fun requestPermission() {
+        ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_RECORD_AUDIO_PERMISSION)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {

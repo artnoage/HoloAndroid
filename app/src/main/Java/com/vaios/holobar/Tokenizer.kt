@@ -60,15 +60,15 @@ class Tokenizer(context: Context) {
         tokenToIdx[languageCodeDe] = tokenToIdx.size
         tokenToIdx[endToken] = tokenToIdx.size
 
-                ('a'..'z').forEach { c ->
-                tokenToIdx[c.toString()] = tokenToIdx.size
+        ('a'..'z').forEach { c ->
+            tokenToIdx[c.toString()] = tokenToIdx.size
         }
         ('A'..'Z').forEach { c ->
-                tokenToIdx[c.toString()] = tokenToIdx.size
+            tokenToIdx[c.toString()] = tokenToIdx.size
         }
 
         "äöüÄÖÜß".forEach { c ->
-                tokenToIdx[c.toString()] = tokenToIdx.size
+            tokenToIdx[c.toString()] = tokenToIdx.size
         }
         tokenToIdx["'"] = tokenToIdx.size
 

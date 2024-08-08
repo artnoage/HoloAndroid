@@ -5,11 +5,11 @@ plugins {
 
 android {
     namespace = "com.vaios.holobar"
-    compileSdk = 34
+    compileSdk = 35
 
     defaultConfig {
         applicationId = "com.vaios.holobar"
-        minSdk = 30
+        minSdk = 31
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"

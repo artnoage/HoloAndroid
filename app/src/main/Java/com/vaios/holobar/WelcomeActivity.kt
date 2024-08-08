@@ -11,9 +11,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
-import java.io.IOException
-import java.util.concurrent.CountDownLatch
+import android.util.Log
 
 class WelcomeActivity : AppCompatActivity() {
 
@@ -21,6 +19,7 @@ class WelcomeActivity : AppCompatActivity() {
     private lateinit var statusTextView: TextView
     private lateinit var apiKeyLinkTextView: TextView
     private lateinit var proceedButton: Button
+    private lateinit var apiCall: ApiCall
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -40,90 +39,74 @@ class WelcomeActivity : AppCompatActivity() {
             startActivity(intent)
         }
 
-        proceedButton.setText(R.string.proceed)
+        proceedButton.text = getString(R.string.proceed)
+
+        // Load saved API key, if any
+        val savedApiKey = loadApiKey()
+        if (savedApiKey.isNotBlank()) {
+            apiKeyEditText.setText(savedApiKey)
+        }
+
+        // Initialize ApiCall with an empty string, we'll set the actual key when validating
+        apiCall = ApiCall(this, "")
     }
 
     private fun validateApiKeyAndProceed() {
         lifecycleScope.launch(Dispatchers.Main) {
-            statusTextView.setText(R.string.validating_api_key)
+            statusTextView.text = getString(R.string.validating_api_key)
             proceedButton.isEnabled = false
 
             val inputApiKey = apiKeyEditText.text.toString().trim()
-            val fileApiKey = loadApiKeyFromFile()
+            val savedApiKey = loadApiKey()
 
             val apiKeyToTest = when {
                 inputApiKey.isNotBlank() -> inputApiKey
-                fileApiKey.isNotBlank() -> fileApiKey
+                savedApiKey.isNotBlank() -> savedApiKey
                 else -> ""
             }
 
             if (apiKeyToTest.isEmpty()) {
-                statusTextView.setText(R.string.no_key_exists)
+                statusTextView.text = getString(R.string.no_key_exists)
                 proceedButton.isEnabled = true
                 return@launch
             }
 
-            val isValid = withContext(Dispatchers.IO) {
-                testApiKey(apiKeyToTest)
-            }
-
-            if (isValid) {
-                if (inputApiKey.isNotBlank() && inputApiKey != fileApiKey) {
-                    saveApiKeyToFile(inputApiKey)
-                }
-                statusTextView.setText(R.string.response_received)
-                val intent = Intent(this@WelcomeActivity, MainActivity::class.java)
-                startActivity(intent)
-                finish()
-            } else {
-                statusTextView.setText(R.string.invalid_api_key)
-                proceedButton.isEnabled = true
-            }
-        }
-    }
-
-    private fun loadApiKeyFromFile(): String {
-        return try {
-            assets.open("gemini_api_key.txt").bufferedReader().use { it.readText().trim() }
-        } catch (e: IOException) {
-            ""
-        }
-    }
-
-    private fun saveApiKeyToFile(apiKey: String) {
-        try {
-            openFileOutput("gemini_api_key.txt", Context.MODE_PRIVATE).use {
-                it.write(apiKey.toByteArray())
-            }
-        } catch (e: IOException) {
-            e.printStackTrace()
-        }
-    }
-
-    private suspend fun testApiKey(apiKey: String): Boolean {
-        return withContext(Dispatchers.IO) {
-            var isValid = false
-            val testText = getString(R.string.test_message)
-            val latch = CountDownLatch(1)
-
-            val processText = ProcessText(this@WelcomeActivity, apiKey)
-            processText.processText(testText, 0, object : ProcessText.ProcessTextCallback {
-                override fun onPieceReady(text: String, audioData: FloatArray, isLastPiece: Boolean) {
-                    isValid = true
-                    latch.countDown()
+            apiCall.checkApiKey(apiKeyToTest, object : ApiCall.ApiKeyValidationCallback {
+                override fun onSuccess(status: String, message: String) {
+                    if (status == "valid") {
+                        if (inputApiKey.isNotBlank() && inputApiKey != savedApiKey) {
+                            saveApiKey(inputApiKey)
+                        }
+                        statusTextView.text = getString(R.string.api_key_valid)
+                        val intent = Intent(this@WelcomeActivity, MainActivity::class.java)
+                        intent.putExtra("API_KEY", apiKeyToTest)
+                        startActivity(intent)
+                        finish()
+                    } else {
+                        statusTextView.text = getString(R.string.invalid_api_key)
+                        proceedButton.isEnabled = true
+                    }
                 }
 
                 override fun onError(error: String) {
-                    isValid = false
-                    latch.countDown()
+                    statusTextView.text = error
+                    proceedButton.isEnabled = true
                 }
-
-
-
             })
-
-            latch.await()
-            isValid
         }
+    }
+
+    private fun loadApiKey(): String {
+        val sharedPref = getSharedPreferences("ApiKeyPref", Context.MODE_PRIVATE)
+        return sharedPref.getString("api_key", "") ?: ""
+    }
+
+    private fun saveApiKey(apiKey: String) {
+        val sharedPref = getSharedPreferences("ApiKeyPref", Context.MODE_PRIVATE)
+        with (sharedPref.edit()) {
+            putString("api_key", apiKey)
+            apply()
+        }
+        Log.d("WelcomeActivity", "API key saved successfully")
     }
 }

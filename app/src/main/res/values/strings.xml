@@ -40,4 +40,5 @@
     <string name="no_key_exists">No API key exists</string>
     <string name="scroll_view_description">Scrollable area containing response text</string>
     <string name="response_text_view_description">Response text view</string>
-</resources>
+    <string name="api_key_valid">Api key is valid</string>
+    </resources>

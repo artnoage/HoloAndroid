@@ -12,6 +12,7 @@ class ProcessText(private val context: Context, private val apiKey: String) {
         private const val VITS_MODEL_FILE = "vits_model.onnx"
         private const val PHONEMIZER_MODEL_FILE = "phonemizer_model.onnx"
 
+        // Mapping between API speaker IDs and VITS model speaker IDs
         private val SPEAKER_ID_MATRIX = arrayOf(
             intArrayOf(0, 8),
             intArrayOf(1, 73),
@@ -32,12 +33,15 @@ class ProcessText(private val context: Context, private val apiKey: String) {
     private fun initializeModels() {
         Log.d(TAG, "Initializing models")
         try {
+            // Initialize VITS synthesizer
             synthesizer = VitsOnnxSynthesizer(context, VITS_MODEL_FILE)
             Log.d(TAG, "VITS synthesizer initialized")
 
+            // Initialize Phonemizer
             Phonemic.initialize(context.assets, PHONEMIZER_MODEL_FILE)
             Log.d(TAG, "Phonemizer initialized")
 
+            // Initialize ApiCall
             apiCall = ApiCall(context, apiKey)
             Log.d(TAG, "ApiCall initialized")
 
@@ -50,29 +54,12 @@ class ProcessText(private val context: Context, private val apiKey: String) {
         }
     }
 
-    fun processText(text: String, speakerId: Int, callback: ProcessTextCallback) {
-        Log.d(TAG, "Processing text. Text length: ${text.length}, Speaker ID: $speakerId")
-
-        processTextOnly(text, speakerId, object : TextOnlyCallback {
-            override fun onSuccess(narration: String, status: String) {
-                val textPieces = splitText(narration)
-                processTextPieces(textPieces, speakerId, callback)
-            }
-
-            override fun onError(error: String) {
-                callback.onError(error)
-            }
-        })
-    }
-
-    private fun processTextOnly(text: String, speakerId: Int, callback: TextOnlyCallback) {
-        Log.d(TAG, "Processing text only. Text length: ${text.length}, Speaker ID: $speakerId")
-
-        apiCall.sendTextToApi(text, speakerId, object : ApiCall.ApiCallCallback {
+    fun sendTextToApi(text: String, speakerId: Int, callback: ProcessTextCallback) {
+        apiCall.sendTextToApi(text, speakerId, object : ApiCall.ChatApiCallback {
             override fun onSuccess(narration: String, status: String) {
                 Log.d(TAG, "API Response received: $narration")
                 Log.d(TAG, "API Status: $status")
-                callback.onSuccess(narration, status)
+                callback.onSuccess(narration)
             }
 
             override fun onError(error: String) {
@@ -82,54 +69,56 @@ class ProcessText(private val context: Context, private val apiKey: String) {
         })
     }
 
-    private fun splitText(text: String): List<String> {
-        val sentences = text.split(". ", "! ", "? ").filter { it.isNotEmpty() }
-        if (sentences.size <= 2) return listOf(text)
+    fun splitText(text: String): List<String> {
+        // If the text is short enough, return it as a single piece
+        if (text.length <= 100) return listOf(text)
 
-        val midpoint = (sentences.size + 1) / 2
-        val firstHalf = sentences.subList(0, midpoint).joinToString(". ") + "."
-        val secondHalf = sentences.subList(midpoint, sentences.size).joinToString(". ") + "."
-        return listOf(firstHalf, secondHalf)
+        val midpoint = text.length / 2
+        // Find the next sentence-ending punctuation after the midpoint
+        val splitIndex = text.substring(midpoint).indexOfFirst { it in ".!?" }
+
+        return if (splitIndex == -1) {
+            // If no suitable split point is found, return the whole text
+            listOf(text)
+        } else {
+            // Split the text at the found punctuation
+            val actualSplitIndex = midpoint + splitIndex + 1
+            listOf(text.substring(0, actualSplitIndex), text.substring(actualSplitIndex).trim())
+        }
     }
 
-    private fun processTextPieces(textPieces: List<String>, speakerId: Int, callback: ProcessTextCallback) {
+    fun synthesizeAudio(textPiece: String, speakerId: Int, callback: (FloatArray) -> Unit) {
         coroutineScope.launch {
-            textPieces.forEachIndexed { index, piece ->
-                try {
-                    val audioData = synthesizeAudio(piece, speakerId)
-                    withContext(Dispatchers.Main) {
-                        callback.onPieceReady(piece, audioData, index == textPieces.lastIndex)
-                    }
-                } catch (e: Exception) {
-                    withContext(Dispatchers.Main) {
-                        callback.onError("Error processing audio: ${e.message}")
-                    }
+            try {
+                val audioData = withContext(Dispatchers.Default) {
+                    val ttsSpeakerId = mapSpeakerId(speakerId)
+                    synthesizer.tts(textPiece, ttsSpeakerId.toLong())
+                }
+                withContext(Dispatchers.Main) {
+                    callback(audioData)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error synthesizing audio", e)
+                withContext(Dispatchers.Main) {
+                    callback(FloatArray(0))  // Empty array to indicate error
                 }
             }
         }
     }
 
-    private suspend fun synthesizeAudio(textPiece: String, speakerId: Int): FloatArray = withContext(Dispatchers.Default) {
-        val ttsSpeakerId = mapSpeakerId(speakerId)
-        synthesizer.tts(textPiece, ttsSpeakerId.toLong())
-    }
-
     private fun mapSpeakerId(apiSpeakerId: Int): Int {
+        // Map the API speaker ID to the corresponding VITS model speaker ID
         for (mapping in SPEAKER_ID_MATRIX) {
             if (mapping[0] == apiSpeakerId) {
                 return mapping[1]
             }
         }
+        // If no mapping is found, return the first VITS model speaker ID
         return SPEAKER_ID_MATRIX[0][1]
     }
 
     interface ProcessTextCallback {
-        fun onPieceReady(text: String, audioData: FloatArray, isLastPiece: Boolean)
-        fun onError(error: String)
-    }
-
-    interface TextOnlyCallback {
-        fun onSuccess(narration: String, status: String)
+        fun onSuccess(narration: String)
         fun onError(error: String)
     }
 }
