@@ -14,7 +14,7 @@ class ProcessText(private val context: Context, private val apiKey: String) {
 
         // Mapping between API speaker IDs and VITS model speaker IDs
         private val SPEAKER_ID_MATRIX = arrayOf(
-            intArrayOf(0, 8),
+            intArrayOf(0, 10),
             intArrayOf(1, 73),
             intArrayOf(2, 6),
             intArrayOf(3, 91),

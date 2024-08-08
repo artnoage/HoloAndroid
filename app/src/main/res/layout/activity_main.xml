@@ -22,17 +22,17 @@
 
     <ScrollView
         android:id="@+id/scroll_view"
-        android:layout_width="169dp"
-        android:layout_height="119dp"
+        android:layout_width="172dp"
+        android:layout_height="144dp"
         android:layout_margin="16dp"
-        android:background="#CCFFFFFF"
+        android:background="#99FFFFFF"
         android:contentDescription="@string/scroll_view_description"
         app:layout_constraintBottom_toTopOf="@id/text_input"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.938"
+        app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.108">
+        app:layout_constraintVertical_bias="0.035">
 
         <LinearLayout
             android:id="@+id/response_container"
@@ -51,7 +51,7 @@
                 android:maxLines="100"
                 android:padding="30dp"
                 android:scrollbars="vertical"
-                android:textColor="@android:color/black"
+                android:textColor="@android:color/holo_red_light"
                 android:visibility="visible" />
         </LinearLayout>
     </ScrollView>

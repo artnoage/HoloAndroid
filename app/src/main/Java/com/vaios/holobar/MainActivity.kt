@@ -14,7 +14,8 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import java.io.ByteArrayOutputStream
 import java.io.File
-
+import java.io.FileOutputStream
+import java.io.IOException
 
 class MainActivity : Activity() {
     companion object {
@@ -23,7 +24,7 @@ class MainActivity : Activity() {
         private const val SAMPLE_RATE = 22050
         private const val CHANNEL_CONFIG = AudioFormat.CHANNEL_IN_MONO
         private const val AUDIO_FORMAT = AudioFormat.ENCODING_PCM_16BIT
-        private const val DEBUG_MODE = true // Set to false in production
+        private const val DEBUG_MODE = false // Set to false in production
     }
 
     private var audioRecord: AudioRecord? = null
@@ -36,16 +37,21 @@ class MainActivity : Activity() {
     private val songs = intArrayOf(R.raw.song1, R.raw.song2, R.raw.song3, R.raw.song4)
 
     private fun startRecording() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+        val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
+        if (bufferSize == AudioRecord.ERROR || bufferSize == AudioRecord.ERROR_BAD_VALUE) {
+            Log.e(TAG, "Invalid buffer size")
+            return
+        }
+
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_RECORD_AUDIO_PERMISSION)
             return
         }
 
-        val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
         audioRecord = AudioRecord(MediaRecorder.AudioSource.MIC, SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT, bufferSize)
 
         if (audioRecord?.state != AudioRecord.STATE_INITIALIZED) {
-            Log.e(TAG, "AudioRecord failed to initialize")
+            Log.e(TAG, "AudioRecord not initialized")
             return
         }
 
@@ -53,23 +59,30 @@ class MainActivity : Activity() {
         isRecording = true
 
         recordingThread = Thread {
-            val buffer = ByteArray(bufferSize)
-            val output = ByteArrayOutputStream()
-
+            val audioBuffer = ByteArray(bufferSize)
+            val outputStream = ByteArrayOutputStream()
             while (isRecording) {
-                val read = audioRecord?.read(buffer, 0, bufferSize) ?: -1
-                if (read > 0) {
-                    output.write(buffer, 0, read)
+                val readSize = audioRecord?.read(audioBuffer, 0, bufferSize) ?: 0
+                if (readSize > 0) {
+                    outputStream.write(audioBuffer, 0, readSize)
                 }
             }
+            recordedAudioData = outputStream.toByteArray()
+            Log.d(TAG, "Recording stopped. Bytes read: ${recordedAudioData?.size}")
 
-            recordedAudioData = output.toByteArray()
-            Log.d(TAG, "Recording finished. Bytes recorded: ${recordedAudioData?.size}")
+            if (DEBUG_MODE) {
+                runOnUiThread {
+                    playDebugAudio()
+                }
+            } else {
+                processInput(recordedAudioData!!)
+            }
         }
-        recordingThread?.start()
 
-        startListeningButton.text = getString(R.string.stop_talking)
+        recordingThread?.start()
         Log.d(TAG, "Recording started")
+        startListeningButton.text = getString(R.string.stop_talking)
+        startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_green_light))
     }
 
     private fun stopRecording() {
@@ -78,9 +91,55 @@ class MainActivity : Activity() {
         audioRecord?.release()
         audioRecord = null
         recordingThread?.join()
-        recordingThread = null
-        startListeningButton.text = getString(R.string.start_talking)
         Log.d(TAG, "Recording stopped")
+        startListeningButton.text = getString(R.string.start_talking)
+        startListeningButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+    }
+
+    private fun playDebugAudio() {
+        recordedAudioData?.let { audioData ->
+            Log.d(TAG, "Playing debug audio. Size: ${audioData.size} bytes")
+
+            val audioTrack = AudioTrack.Builder()
+                .setAudioAttributes(AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                    .build())
+                .setAudioFormat(AudioFormat.Builder()
+                    .setEncoding(AUDIO_FORMAT)
+                    .setSampleRate(SAMPLE_RATE)
+                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                    .build())
+                .setBufferSizeInBytes(audioData.size)
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .build()
+
+            audioTrack.write(audioData, 0, audioData.size)
+            audioTrack.play()
+
+            // Wait for playback to finish
+            Thread {
+                Thread.sleep(audioData.size * 1000L / (SAMPLE_RATE * 2))
+                audioTrack.release()
+                runOnUiThread {
+                    processInput(audioData)
+                }
+            }.start()
+
+            // Save debug audio file
+            saveAudioToFile(audioData)
+        }
+    }
+
+    private fun saveAudioToFile(audioData: ByteArray) {
+        val fileName = "debug_audio_${System.currentTimeMillis()}.pcm"
+        val file = File(externalCacheDir, fileName)
+        try {
+            FileOutputStream(file).use { it.write(audioData) }
+            Log.d(TAG, "Audio saved to file: ${file.absolutePath}")
+        } catch (e: IOException) {
+            Log.e(TAG, "Error saving audio file", e)
+        }
     }
 
 
@@ -164,7 +223,7 @@ class MainActivity : Activity() {
         setupSpeakerSpinner()
         setupButtons()
 
-        val apiKey = intent.getStringExtra("API_KEY") ?: loadApiKey()
+        val apiKey = loadApiKey()
         apiCall = ApiCall(this, apiKey)
         processText = ProcessText(this, apiKey)
 
@@ -186,7 +245,7 @@ class MainActivity : Activity() {
 
     private fun loadApiKey(): String {
         return try {
-            assets.open("gemini_api_key.txt").bufferedReader().use { it.readText().trim() }
+            File(filesDir, "gemini_api_key.txt").readText().trim()
         } catch (e: Exception) {
             Log.e(TAG, "Error loading API key: ${e.message}")
             ""

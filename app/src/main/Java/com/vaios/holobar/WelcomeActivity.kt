@@ -1,17 +1,16 @@
 package com.vaios.holobar
 
-import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.text.InputType
+import android.util.Log
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
-import androidx.lifecycle.lifecycleScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.launch
-import android.util.Log
+import kotlinx.coroutines.*
+import java.io.File
 import java.io.IOException
 
 class WelcomeActivity : AppCompatActivity() {
@@ -22,103 +21,161 @@ class WelcomeActivity : AppCompatActivity() {
     private lateinit var proceedButton: Button
     private lateinit var apiCall: ApiCall
 
+    private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private val TAG = "WelcomeActivity"
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_welcome)
 
-        apiKeyEditText = findViewById(R.id.apiKeyEditText)
-        statusTextView = findViewById(R.id.statusTextView)
-        apiKeyLinkTextView = findViewById(R.id.apiKeyLinkTextView)
-        proceedButton = findViewById(R.id.proceedButton)
-
-        proceedButton.setOnClickListener {
-            validateApiKeyAndProceed()
-        }
-
-        apiKeyLinkTextView.setOnClickListener {
-            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ai.google.dev/gemini-api/docs/api-key"))
-            startActivity(intent)
-        }
-
-        proceedButton.text = getString(R.string.proceed)
-
-        // Load saved API key, if any
-        val savedApiKey = loadApiKey()
-        if (savedApiKey.isNotBlank()) {
-            apiKeyEditText.setText(savedApiKey)
-        }
+        initializeViews()
+        setupListeners()
 
         // Initialize ApiCall with an empty string, we'll set the actual key when validating
         apiCall = ApiCall(this, "")
     }
 
-    private fun validateApiKeyAndProceed() {
-        lifecycleScope.launch(Dispatchers.Main) {
-            statusTextView.text = getString(R.string.validating_api_key)
-            proceedButton.isEnabled = false
-
-            val inputApiKey = apiKeyEditText.text.toString().trim()
-            val savedApiKey = loadApiKey()
-            val assetApiKey = loadApiKeyFromAssets()
-
-            val apiKeyToTest = when {
-                inputApiKey.isNotBlank() -> inputApiKey
-                assetApiKey.isNotBlank() -> assetApiKey
-                savedApiKey.isNotBlank() -> savedApiKey
-                else -> ""
-            }
-
-            if (apiKeyToTest.isEmpty()) {
-                statusTextView.text = getString(R.string.no_key_exists)
-                proceedButton.isEnabled = true
-                return@launch
-            }
-
-            apiCall.checkApiKey(apiKeyToTest, object : ApiCall.ApiKeyValidationCallback {
-                override fun onSuccess(status: String, message: String) {
-                    if (status == "valid") {
-                        if (inputApiKey.isNotBlank() && inputApiKey != savedApiKey) {
-                            saveApiKey(inputApiKey)
-                        }
-                        statusTextView.text = getString(R.string.api_key_valid)
-                        val intent = Intent(this@WelcomeActivity, MainActivity::class.java)
-                        intent.putExtra("API_KEY", apiKeyToTest)
-                        startActivity(intent)
-                        finish()
-                    } else {
-                        statusTextView.text = getString(R.string.invalid_api_key)
-                        proceedButton.isEnabled = true
-                    }
-                }
-
-                override fun onError(error: String) {
-                    statusTextView.text = error
-                    proceedButton.isEnabled = true
-                }
-            })
+    private fun initializeViews() {
+        apiKeyEditText = findViewById<EditText>(R.id.apiKeyEditText).apply {
+            inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+        }
+        statusTextView = findViewById(R.id.statusTextView)
+        apiKeyLinkTextView = findViewById(R.id.apiKeyLinkTextView)
+        proceedButton = findViewById<Button>(R.id.proceedButton).apply {
+            isEnabled = true
+            text = getString(R.string.proceed)
         }
     }
 
-    private fun loadApiKey(): String {
-        val sharedPref = getSharedPreferences("ApiKeyPref", Context.MODE_PRIVATE)
-        return sharedPref.getString("api_key", "") ?: ""
+    private fun setupListeners() {
+        apiKeyLinkTextView.setOnClickListener {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://ai.google.dev/gemini-api/docs/api-key"))
+            startActivity(intent)
+        }
+
+        proceedButton.setOnClickListener {
+            proceedButton.isEnabled = false
+            validateApiKey()
+        }
+    }
+
+    private fun validateApiKey() {
+        coroutineScope.launch {
+            val userInputKey = apiKeyEditText.text.toString().trim()
+
+            if (userInputKey.isNotBlank()) {
+                // Prioritize user input
+                updateStatus(getString(R.string.validating_key))
+                if (validateKeyWithApi(userInputKey)) {
+                    saveApiKey(userInputKey)
+                    proceedToMainActivity()
+                    return@launch
+                } else {
+                    updateStatus(getString(R.string.invalid_api_key))
+                    proceedButton.isEnabled = true
+                    return@launch
+                }
+            }
+
+            // If user input is empty, check other sources
+            updateStatus(getString(R.string.checking_for_key))
+
+            // Check for key in assets
+            val assetKey = loadApiKeyFromAssets()
+            if (assetKey.isNotBlank()) {
+                if (validateKeyWithApi(assetKey)) {
+                    saveApiKey(assetKey)
+                    proceedToMainActivity()
+                    return@launch
+                }
+            }
+
+            // Check for saved key
+            val savedKey = loadApiKey()
+            if (savedKey.isNotBlank()) {
+                if (validateKeyWithApi(savedKey)) {
+                    proceedToMainActivity()
+                    return@launch
+                }
+            }
+
+            // No valid key found
+            updateStatus(getString(R.string.no_valid_key_found))
+            proceedButton.isEnabled = true
+        }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private suspend fun validateKeyWithApi(key: String): Boolean {
+        return withContext(Dispatchers.IO) {
+            try {
+                suspendCancellableCoroutine { continuation ->
+                    apiCall.checkApiKey(key, object : ApiCall.ApiKeyValidationCallback {
+                        override fun onSuccess(status: String, message: String) {
+                            if (continuation.isActive) continuation.resume(status == "valid") {
+                                // This is the onCancellation lambda
+                                // Add any cancellation cleanup code here if needed
+                            }
+                        }
+                        override fun onError(error: String) {
+                            if (continuation.isActive) continuation.resume(false) {
+                                // This is the onCancellation lambda
+                                // Add any cancellation cleanup code here if needed
+                            }
+                        }
+                    })
+                }
+            } catch (e: Exception) {
+                updateStatus("Error validating key: ${e.message}")
+                false
+            }
+        }
     }
 
     private fun loadApiKeyFromAssets(): String {
         return try {
             assets.open("key.txt").bufferedReader().use { it.readText().trim() }
         } catch (e: IOException) {
-            Log.d("WelcomeActivity", "No key.txt found in assets or error reading it: ${e.message}")
+            Log.e(TAG, "Error loading API key from assets: ${e.message}")
+            ""
+        }
+    }
+
+    private fun loadApiKey(): String {
+        return try {
+            File(filesDir, "gemini_api_key.txt").readText().trim()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading API key: ${e.message}")
             ""
         }
     }
 
     private fun saveApiKey(apiKey: String) {
-        val sharedPref = getSharedPreferences("ApiKeyPref", Context.MODE_PRIVATE)
-        with (sharedPref.edit()) {
-            putString("api_key", apiKey)
-            apply()
+        try {
+            File(filesDir, "gemini_api_key.txt").writeText(apiKey)
+        } catch (e: IOException) {
+            Log.e(TAG, "Error saving API key: ${e.message}")
         }
-        Log.d("WelcomeActivity", "API key saved successfully")
+    }
+
+    private fun proceedToMainActivity() {
+        // Clear the API key from memory
+        apiKeyEditText.text.clear()
+
+        // Start MainActivity and finish WelcomeActivity
+        val intent = Intent(this@WelcomeActivity, MainActivity::class.java)
+        startActivity(intent)
+        finish()
+    }
+
+    private fun updateStatus(message: String) {
+        runOnUiThread {
+            statusTextView.text = message
+        }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        coroutineScope.cancel()
     }
 }

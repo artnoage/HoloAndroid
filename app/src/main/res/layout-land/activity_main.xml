@@ -58,20 +58,20 @@
 
     <EditText
         android:id="@+id/text_input"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_width="569dp"
+        android:layout_height="43dp"
         android:layout_marginStart="16dp"
         android:layout_marginEnd="8dp"
         android:layout_marginBottom="8dp"
         android:autofillHints="@string/Enter_text_here"
+        android:background="#CCFFFFFF"
         android:hint="@string/Enter_text_here"
         android:inputType="text"
         android:minHeight="48dp"
-        android:visibility="visible"
-        android:background="#CCFFFFFF"
         android:padding="8dp"
         android:textColor="@android:color/black"
         android:textColorHint="#80000000"
+        android:visibility="visible"
         app:layout_constraintBottom_toTopOf="@+id/speaker_spinner"
         app:layout_constraintEnd_toStartOf="@+id/send_text_button"
         app:layout_constraintStart_toStartOf="parent"
@@ -89,8 +89,8 @@
 
     <Spinner
         android:id="@+id/speaker_spinner"
-        android:layout_width="140dp"
-        android:layout_height="60dp"
+        android:layout_width="153dp"
+        android:layout_height="43dp"
         android:layout_marginStart="16dp"
         android:layout_marginBottom="24dp"
         android:background="@android:drawable/btn_dropdown"
@@ -104,8 +104,8 @@
 
     <Button
         android:id="@+id/start_listening_button"
-        android:layout_width="214dp"
-        android:layout_height="57dp"
+        android:layout_width="215dp"
+        android:layout_height="41dp"
         android:text="@string/start_talking"
         app:layout_constraintBottom_toBottomOf="@+id/speaker_spinner"
         app:layout_constraintEnd_toStartOf="@+id/next_song_button"
@@ -114,8 +114,8 @@
 
     <Button
         android:id="@+id/next_song_button"
-        android:layout_width="164dp"
-        android:layout_height="61dp"
+        android:layout_width="154dp"
+        android:layout_height="43dp"
         android:text="@string/next_song"
         app:layout_constraintBottom_toBottomOf="@+id/start_listening_button"
         app:layout_constraintEnd_toStartOf="@+id/restart_button"
@@ -125,8 +125,8 @@
 
     <Button
         android:id="@+id/restart_button"
-        android:layout_width="109dp"
-        android:layout_height="65dp"
+        android:layout_width="102dp"
+        android:layout_height="44dp"
         android:layout_marginEnd="16dp"
         android:text="@string/restart"
         app:layout_constraintBottom_toBottomOf="@+id/next_song_button"
