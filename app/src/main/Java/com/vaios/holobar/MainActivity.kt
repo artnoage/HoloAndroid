@@ -65,14 +65,6 @@ class MainActivity : Activity() {
 
             recordedAudioData = output.toByteArray()
             Log.d(TAG, "Recording finished. Bytes recorded: ${recordedAudioData?.size}")
-
-            runOnUiThread {
-                if (DEBUG_MODE) {
-                    playDebugAudio()
-                } else {
-                    processInput(recordedAudioData!!)
-                }
-            }
         }
         recordingThread?.start()
 
@@ -91,46 +83,6 @@ class MainActivity : Activity() {
         Log.d(TAG, "Recording stopped")
     }
 
-    private fun playDebugAudio() {
-        recordedAudioData?.let { audioData ->
-            Log.d(TAG, "Playing debug audio. Size: ${audioData.size} bytes")
-
-            try {
-                val audioTrack = AudioTrack.Builder()
-                    .setAudioAttributes(AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_MEDIA)
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                        .build())
-                    .setAudioFormat(AudioFormat.Builder()
-                        .setEncoding(AUDIO_FORMAT)
-                        .setSampleRate(SAMPLE_RATE)
-                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                        .build())
-                    .setBufferSizeInBytes(audioData.size)
-                    .setTransferMode(AudioTrack.MODE_STATIC)
-                    .build()
-
-                audioTrack.write(audioData, 0, audioData.size)
-                audioTrack.play()
-
-                // Wait for playback to finish
-                Thread {
-                    Thread.sleep(audioData.size * 1000L / (SAMPLE_RATE * 2))
-                    audioTrack.release()
-                    runOnUiThread {
-                        Toast.makeText(this, "Debug audio playback finished", Toast.LENGTH_SHORT).show()
-                        processInput(audioData)
-                    }
-                }.start()
-            } catch (e: Exception) {
-                Log.e(TAG, "Error playing debug audio", e)
-                Toast.makeText(this, "Error playing debug audio: ${e.message}", Toast.LENGTH_SHORT).show()
-            }
-        } ?: run {
-            Log.e(TAG, "No audio data to play")
-            Toast.makeText(this, "No audio data to play", Toast.LENGTH_SHORT).show()
-        }
-    }
 
 
     private fun playAudio(audio: FloatArray) {
