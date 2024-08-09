@@ -7,7 +7,7 @@ import java.io.ByteArrayOutputStream
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
-import kotlin.math.min
+
 
 class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
     private val maxSeqLen: Int = config.getProperty("max_seq_len").toInt()
@@ -42,7 +42,7 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
 
         private fun calculateOptimalThreads(): Int {
             val availableProcessors = Runtime.getRuntime().availableProcessors()
-            return min(max(1, (availableProcessors * 0.75).toInt()), 4)
+            return max(1, (availableProcessors * 0.75).toInt())
         }
     }
 

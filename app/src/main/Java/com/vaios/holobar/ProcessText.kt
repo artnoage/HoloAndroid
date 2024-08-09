@@ -17,7 +17,7 @@ class ProcessText(private val context: Context, private val apiKey: String) {
             intArrayOf(0, 10),
             intArrayOf(1, 73),
             intArrayOf(2, 6),
-            intArrayOf(3, 91),
+            intArrayOf(3, 108),
             intArrayOf(4, 97)
         )
     }

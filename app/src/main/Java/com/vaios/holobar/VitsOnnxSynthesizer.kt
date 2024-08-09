@@ -7,7 +7,6 @@ import java.io.ByteArrayOutputStream
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import kotlin.math.max
-import kotlin.math.min
 
 class VitsOnnxSynthesizer(context: Context, modelFileName: String) : AutoCloseable {
     companion object {
@@ -17,7 +16,7 @@ class VitsOnnxSynthesizer(context: Context, modelFileName: String) : AutoCloseab
         private fun calculateOptimalThreads(): Int {
             val availableProcessors = Runtime.getRuntime().availableProcessors()
             // Use 75% of available cores, but at least 1 and at most 4
-            return min(max(1, (availableProcessors * 0.75).toInt()), 4)
+            return max(1, (availableProcessors * 0.75).toInt())
         }
     }
 
