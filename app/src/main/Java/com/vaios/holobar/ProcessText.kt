@@ -57,7 +57,7 @@ class ProcessText(private val context: Context, private val apiKey: String) {
 
     fun splitText(text: String): List<String> {
         // If the text is short enough, return it as a single piece
-        if (text.length <= 100) return listOf(text)
+        if (text.length <= 160) return listOf(text)
 
         val midpoint = text.length / 2
         // Find the next sentence-ending punctuation after the midpoint

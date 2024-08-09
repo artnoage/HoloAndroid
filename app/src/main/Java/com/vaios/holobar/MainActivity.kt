@@ -5,8 +5,6 @@ import android.app.Activity
 import android.content.pm.PackageManager
 import android.media.*
 import android.os.Bundle
-import android.os.Handler
-import android.os.Looper
 import android.util.Log
 import android.view.View
 import android.widget.*
@@ -32,9 +30,118 @@ class MainActivity : Activity() {
     private var isRecording = false
     private var recordedAudioData: ByteArray? = null
 
-    private var mediaPlayer: MediaPlayer? = null
-    private var currentSongIndex = 0
-    private val songs = intArrayOf(R.raw.song1, R.raw.song2, R.raw.song3, R.raw.song4)
+    private lateinit var processText: ProcessText
+    private lateinit var apiCall: ApiCall
+    private lateinit var speakerSpinner: Spinner
+    private lateinit var startListeningButton: Button
+    private lateinit var backgroundImage: ImageView
+    private lateinit var progressBar: ProgressBar
+    private lateinit var scrollView: ScrollView
+    private lateinit var responseContainer: LinearLayout
+    private lateinit var nextSongButton: Button
+    private lateinit var restartButton: Button
+    private lateinit var textInput: EditText
+    private lateinit var sendTextButton: Button
+
+    private lateinit var audioPlaybackManager: AudioPlaybackManager
+    private lateinit var processAndResponseManager: ProcessAndResponseManager
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContentView(R.layout.activity_main)
+
+        Log.d(TAG, "onCreate: Initializing MainActivity")
+
+        initializeViews()
+        setupSpeakerSpinner()
+        setupButtons()
+
+        val apiKey = loadApiKey()
+        apiCall = ApiCall(this, apiKey)
+        processText = ProcessText(this, apiKey)
+
+        audioPlaybackManager = AudioPlaybackManager(this)
+        processAndResponseManager = ProcessAndResponseManager(
+            this,
+            apiCall,
+            processText
+        )
+    }
+
+    private fun initializeViews() {
+        speakerSpinner = findViewById(R.id.speaker_spinner)
+        startListeningButton = findViewById(R.id.start_listening_button)
+        backgroundImage = findViewById(R.id.background_image)
+        nextSongButton = findViewById(R.id.next_song_button)
+        restartButton = findViewById(R.id.restart_button)
+        progressBar = findViewById(R.id.progress_bar)
+        textInput = findViewById(R.id.text_input)
+        sendTextButton = findViewById(R.id.send_text_button)
+        scrollView = findViewById(R.id.scroll_view)
+        responseContainer = findViewById(R.id.response_container)
+    }
+
+    private fun loadApiKey(): String {
+        return try {
+            File(filesDir, "gemini_api_key.txt").readText().trim()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error loading API key: ${e.message}")
+            ""
+        }
+    }
+
+    private fun setupSpeakerSpinner() {
+        ArrayAdapter.createFromResource(
+            this,
+            R.array.speaker_array,
+            android.R.layout.simple_spinner_item
+        ).also { adapter ->
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
+            speakerSpinner.adapter = adapter
+        }
+
+        speakerSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
+                updateBackgroundImage(position)
+                clearResponseContainer() // Clear the response container when a new speaker is selected
+            }
+
+            override fun onNothingSelected(parent: AdapterView<*>) {
+                // Do nothing
+            }
+        }
+    }
+
+    private fun setupButtons() {
+        startListeningButton.setOnClickListener {
+            if (checkPermission()) {
+                if (!isRecording) {
+                    startRecording()
+                } else {
+                    stopRecording()
+                }
+            } else {
+                requestPermission()
+            }
+        }
+
+        nextSongButton.setOnClickListener { audioPlaybackManager.nextSong() }
+
+        restartButton.setOnClickListener {
+            deleteUpdatedHistory()
+            clearResponseContainer() // Clear the response container when history is deleted
+        }
+
+        sendTextButton.setOnClickListener {
+            val text = textInput.text.toString()
+            if (text.isNotEmpty()) {
+                processInput(text)
+                textInput.text.clear()
+            } else {
+                Toast.makeText(this, getString(R.string.empty_input_message), Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
 
     private fun startRecording() {
         val bufferSize = AudioRecord.getMinBufferSize(SAMPLE_RATE, CHANNEL_CONFIG, AUDIO_FORMAT)
@@ -75,7 +182,9 @@ class MainActivity : Activity() {
                     playDebugAudio()
                 }
             } else {
-                processInput(recordedAudioData!!)
+                runOnUiThread {
+                    processInput(recordedAudioData!!)
+                }
             }
         }
 
@@ -142,164 +251,6 @@ class MainActivity : Activity() {
         }
     }
 
-
-
-    private fun playAudio(audio: FloatArray) {
-        Log.d(TAG, "Playing audio. Length: ${audio.size}")
-        val bufferSize = AudioTrack.getMinBufferSize(SAMPLE_RATE, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-        try {
-            AudioTrack.Builder()
-                .setAudioAttributes(AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_MEDIA)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build())
-                .setAudioFormat(AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                    .setSampleRate(SAMPLE_RATE)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build())
-                .setBufferSizeInBytes(bufferSize)
-                .build().apply {
-                    setVolume(0.8f)
-                    play()
-                    write(audio, 0, audio.size, AudioTrack.WRITE_BLOCKING)
-                    stop()
-                    release()
-                }
-            Log.d(TAG, "Audio playback completed")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error playing audio: ${e.message}")
-        }
-    }
-
-    private fun initializeMediaPlayer() {
-        mediaPlayer = MediaPlayer.create(this, songs[currentSongIndex]).apply {
-            isLooping = true
-            setVolume(0.1f, 0.1f)
-            start()
-            setOnCompletionListener { playNextSong() }
-        }
-    }
-
-    private fun playNextSong() {
-        mediaPlayer?.apply {
-            stop()
-            release()
-        }
-
-        currentSongIndex = (currentSongIndex + 1) % songs.size
-        mediaPlayer = MediaPlayer.create(this, songs[currentSongIndex]).apply {
-            isLooping = true
-            setVolume(0.1f, 0.1f)
-            start()
-        }
-    }
-
-    // Other properties
-    private lateinit var processText: ProcessText
-    private lateinit var apiCall: ApiCall
-    private lateinit var speakerSpinner: Spinner
-    private lateinit var startListeningButton: Button
-    private lateinit var backgroundImage: ImageView
-    private lateinit var progressBar: ProgressBar
-    private lateinit var scrollView: ScrollView
-    private lateinit var responseContainer: LinearLayout
-    private lateinit var nextSongButton: Button
-    private lateinit var restartButton: Button
-    private lateinit var textInput: EditText
-    private lateinit var sendTextButton: Button
-
-    private var firstPieceFinished = false
-    private var secondPieceAudio: FloatArray? = null
-    private var textPieces: List<String> = listOf()
-
-    override fun onCreate(savedInstanceState: Bundle?) {
-        super.onCreate(savedInstanceState)
-        setContentView(R.layout.activity_main)
-
-        Log.d(TAG, "onCreate: Initializing MainActivity")
-
-        initializeViews()
-        setupSpeakerSpinner()
-        setupButtons()
-
-        val apiKey = loadApiKey()
-        apiCall = ApiCall(this, apiKey)
-        processText = ProcessText(this, apiKey)
-
-        initializeMediaPlayer()
-    }
-
-    private fun initializeViews() {
-        speakerSpinner = findViewById(R.id.speaker_spinner)
-        startListeningButton = findViewById(R.id.start_listening_button)
-        backgroundImage = findViewById(R.id.background_image)
-        nextSongButton = findViewById(R.id.next_song_button)
-        restartButton = findViewById(R.id.restart_button)
-        progressBar = findViewById(R.id.progress_bar)
-        textInput = findViewById(R.id.text_input)
-        sendTextButton = findViewById(R.id.send_text_button)
-        scrollView = findViewById(R.id.scroll_view)
-        responseContainer = findViewById(R.id.response_container)
-    }
-
-    private fun loadApiKey(): String {
-        return try {
-            File(filesDir, "gemini_api_key.txt").readText().trim()
-        } catch (e: Exception) {
-            Log.e(TAG, "Error loading API key: ${e.message}")
-            ""
-        }
-    }
-
-    private fun setupSpeakerSpinner() {
-        ArrayAdapter.createFromResource(
-            this,
-            R.array.speaker_array,
-            android.R.layout.simple_spinner_item
-        ).also { adapter ->
-            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item)
-            speakerSpinner.adapter = adapter
-        }
-
-        speakerSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
-                updateBackgroundImage(position)
-            }
-
-            override fun onNothingSelected(parent: AdapterView<*>) {
-                // Do nothing
-            }
-        }
-    }
-
-    private fun setupButtons() {
-        startListeningButton.setOnClickListener {
-            if (checkPermission()) {
-                if (!isRecording) {
-                    startRecording()
-                } else {
-                    stopRecording()
-                }
-            } else {
-                requestPermission()
-            }
-        }
-
-        nextSongButton.setOnClickListener { playNextSong() }
-        restartButton.setOnClickListener { deleteUpdatedHistory() }
-
-        sendTextButton.setOnClickListener {
-            val text = textInput.text.toString()
-            if (text.isNotEmpty()) {
-                processInput(text)
-                textInput.text.clear()
-            } else {
-                Toast.makeText(this, "Please enter some text", Toast.LENGTH_SHORT).show()
-            }
-        }
-    }
-
     private fun processInput(input: Any) {
         val selectedSpeakerId = speakerSpinner.selectedItemPosition
         val isAudio = input is ByteArray
@@ -310,84 +261,14 @@ class MainActivity : Activity() {
             Log.d(TAG, "Processing text: $input")
         }
 
-        runOnUiThread {
-            disableInputs()
-            progressBar.visibility = View.VISIBLE
-        }
-        mediaPlayer?.pause()
+        disableInputs()
+        progressBar.visibility = View.VISIBLE
 
-        val apiCallback = object : ApiCall.ChatApiCallback {
-            override fun onSuccess(narration: String, status: String) {
-                runOnUiThread {
-                    textPieces = processText.splitText(narration)
-                    processTextPieces(selectedSpeakerId)
-                    Log.d(TAG, "API Status: $status")
-                }
-            }
-
-            override fun onError(error: String) {
-                runOnUiThread {
-                    Toast.makeText(this@MainActivity, "Error: $error", Toast.LENGTH_SHORT).show()
-                    enableInputs()
-                    progressBar.visibility = View.GONE
-                    mediaPlayer?.start()
-                }
-            }
-        }
-
-        if (isAudio) {
-            apiCall.speakToAgents(input as ByteArray, selectedSpeakerId, apiCallback)
-        } else {
-            apiCall.talkToAgents(input as String, selectedSpeakerId, apiCallback)
-        }
-    }
-
-    private fun processTextPieces(speakerId: Int) {
-        firstPieceFinished = false
-        secondPieceAudio = null
-
-        // Process first piece
-        processText.synthesizeAudio(textPieces[0], speakerId) { audioData ->
-            runOnUiThread {
-                playAudioAndStreamText(textPieces[0], audioData, textPieces.size == 1)
-
-                // Start processing second piece immediately if it exists
-                if (textPieces.size > 1) {
-                    processText.synthesizeAudio(textPieces[1], speakerId) { secondAudioData ->
-                        runOnUiThread {
-                            secondPieceAudio = secondAudioData
-                            playSecondPieceIfReady()
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    private fun playAudioAndStreamText(text: String, audioData: FloatArray, isLastPiece: Boolean) {
         val responseTextView = createNewResponseTextView()
-        streamText(text, responseTextView)
-
-        Thread {
-            playAudio(audioData)
+        processAndResponseManager.process(input, selectedSpeakerId, responseTextView) {
             runOnUiThread {
-                if (isLastPiece) {
-                    enableInputs()
-                    progressBar.visibility = View.GONE
-                    mediaPlayer?.start()
-                } else {
-                    firstPieceFinished = true
-                    playSecondPieceIfReady()
-                }
-            }
-        }.start()
-    }
-
-    private fun playSecondPieceIfReady() {
-        secondPieceAudio?.let { audioData ->
-            if (firstPieceFinished && textPieces.size > 1) {
-                playAudioAndStreamText(textPieces[1], audioData, true)
-                secondPieceAudio = null
+                enableInputs()
+                progressBar.visibility = View.GONE
             }
         }
     }
@@ -402,25 +283,6 @@ class MainActivity : Activity() {
         }
         responseContainer.addView(newTextView)
         return newTextView
-    }
-
-    private fun streamText(text: String, textView: TextView) {
-        textView.text = ""
-        val words = text.split(" ")
-        var currentIndex = 0
-
-        val handler = Handler(Looper.getMainLooper())
-        val textStreamer = object : Runnable {
-            override fun run() {
-                if (currentIndex < words.size) {
-                    textView.append(words[currentIndex] + " ")
-                    currentIndex++
-                    handler.postDelayed(this, 100) // Adjust delay as needed
-                    scrollView.fullScroll(View.FOCUS_DOWN)
-                }
-            }
-        }
-        handler.post(textStreamer)
     }
 
     private fun updateBackgroundImage(position: Int) {
@@ -441,6 +303,7 @@ class MainActivity : Activity() {
             if (historyFile.delete()) {
                 Toast.makeText(this, R.string.history_deleted_success, Toast.LENGTH_SHORT).show()
                 Log.d(TAG, "Updated history file deleted: ${historyFile.absolutePath}")
+                clearResponseContainer() // Clear the response container
             } else {
                 Toast.makeText(this, R.string.history_delete_failed, Toast.LENGTH_SHORT).show()
                 Log.e(TAG, "Failed to delete updated history file: ${historyFile.absolutePath}")
@@ -448,25 +311,26 @@ class MainActivity : Activity() {
         } else {
             Toast.makeText(this, R.string.history_file_not_exist, Toast.LENGTH_SHORT).show()
             Log.d(TAG, "Updated history file does not exist: ${historyFile.absolutePath}")
+            clearResponseContainer() // Clear the response container even if the file doesn't exist
         }
+    }
+
+    private fun clearResponseContainer() {
+        responseContainer.removeAllViews()
     }
 
     private fun disableInputs() {
-        runOnUiThread {
-            startListeningButton.isEnabled = false
-            speakerSpinner.isEnabled = false
-            textInput.isEnabled = false
-            sendTextButton.isEnabled = false
-        }
+        startListeningButton.isEnabled = false
+        speakerSpinner.isEnabled = false
+        textInput.isEnabled = false
+        sendTextButton.isEnabled = false
     }
 
     private fun enableInputs() {
-        runOnUiThread {
-            startListeningButton.isEnabled = true
-            speakerSpinner.isEnabled = true
-            textInput.isEnabled = true
-            sendTextButton.isEnabled = true
-        }
+        startListeningButton.isEnabled = true
+        speakerSpinner.isEnabled = true
+        textInput.isEnabled = true
+        sendTextButton.isEnabled = true
     }
 
     private fun checkPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
@@ -491,28 +355,13 @@ class MainActivity : Activity() {
 
     override fun onPause() {
         super.onPause()
-        mediaPlayer?.pause()
         if (isRecording) {
             stopRecording()
         }
     }
 
-    override fun onResume() {
-        super.onResume()
-        if (mediaPlayer == null) {
-            initializeMediaPlayer()
-        } else if (!mediaPlayer!!.isPlaying) {
-            mediaPlayer?.start()
-        }
-    }
-
     override fun onStop() {
         super.onStop()
-        mediaPlayer?.apply {
-            stop()
-            release()
-        }
-        mediaPlayer = null
         if (isRecording) {
             stopRecording()
         }
@@ -520,11 +369,8 @@ class MainActivity : Activity() {
 
     override fun onDestroy() {
         super.onDestroy()
-        mediaPlayer?.apply {
-            stop()
-            release()
-        }
-        mediaPlayer = null
+        audioPlaybackManager.release()
+        processAndResponseManager.cancel()
         if (isRecording) {
             stopRecording()
         }

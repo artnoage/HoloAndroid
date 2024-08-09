@@ -56,4 +56,5 @@
     <string name="key_cannot_be_empty">API key cannot be empty</string>
     <string name="valid_key_found">Valid API key found. Ready to proceed.</string>
     <string name="no_valid_key_found"> No Valid API key found.</string>
+    <string name="empty_input_message">Empty input messages</string>
     </resources>
