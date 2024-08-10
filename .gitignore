@@ -1,6 +1,5 @@
 build/distributions/*.zip
 build/distributions/*.tar
 build/libs/*.jar
-.idea
 .gradle
 app/build
