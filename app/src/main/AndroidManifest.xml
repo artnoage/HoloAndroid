@@ -28,6 +28,10 @@
         </activity>
 
         <activity
+            android:name=".DownloadAssetsActivity"
+            android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
+
+        <activity
             android:name=".WelcomeActivity"
             android:theme="@style/Theme.MaterialComponents.DayNight.NoActionBar" />
 
