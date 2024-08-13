@@ -4,3 +4,4 @@ build/libs/*.jar
 .idea
 .gradle
 app/buildapp/src/main/assets/my_assets/*
+app/build/
