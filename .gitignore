@@ -5,3 +5,4 @@ build/libs/*.jar
 .gradle
 app/buildapp/src/main/assets/my_assets/*
 app/build/
+app/src/main/assets/my_assets/
