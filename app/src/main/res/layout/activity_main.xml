@@ -19,16 +19,15 @@
 
     <ScrollView
         android:id="@+id/scroll_view"
-        android:layout_width="150dp"
-        android:layout_height="157dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:layout_margin="16dp"
-        android:layout_marginTop="4dp"
         android:background="#80FFFFFF"
         android:contentDescription="@string/response_area_description"
-        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintWidth_percent="0.2"
         app:layout_constraintHeight_percent="0.2"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintWidth_percent="0.2">
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
 
         <LinearLayout
             android:id="@+id/response_container"
@@ -65,12 +64,12 @@
 
             <EditText
                 android:id="@+id/text_input"
-                android:layout_width="273dp"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:autofillHints="message"
                 android:hint="@string/text_input_hint"
                 android:inputType="text"
+                android:autofillHints="message"
                 android:minHeight="48dp"
                 android:textSize="16sp" />
 

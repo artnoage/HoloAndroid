@@ -2,6 +2,7 @@ package com.vaios.holobar
 
 import ai.onnxruntime.*
 import java.io.File
+import java.io.InputStream
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
@@ -20,13 +21,22 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
 
         @JvmStatic
         fun initialize(modelFilePath: String) {
+            initialize(File(modelFilePath).readBytes())
+        }
+
+        @JvmStatic
+        fun initialize(inputStream: InputStream) {
+            initialize(inputStream.readBytes())
+        }
+
+        @JvmStatic
+        fun initialize(modelData: ByteArray) {
             env = OrtEnvironment.getEnvironment()
-            val modelBytes = File(modelFilePath).readBytes()
             val sessionOptions = OrtSession.SessionOptions().apply {
                 setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
                 setIntraOpNumThreads(calculateOptimalThreads())
             }
-            session = env.createSession(modelBytes, sessionOptions)
+            session = env.createSession(modelData, sessionOptions)
         }
 
         private fun calculateOptimalThreads(): Int {

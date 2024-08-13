@@ -19,15 +19,15 @@
 
     <ScrollView
         android:id="@+id/scroll_view"
-        android:layout_width="938dp"
-        android:layout_height="911dp"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
         android:layout_margin="16dp"
         android:background="#80FFFFFF"
         android:contentDescription="@string/response_area_description"
+        app:layout_constraintWidth_percent="0.3"
+        app:layout_constraintHeight_percent="0.3"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHeight_percent="0.2"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintWidth_percent="0.2">
+        app:layout_constraintTop_toTopOf="parent">
 
         <LinearLayout
             android:id="@+id/response_container"
@@ -61,73 +61,86 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:padding="8dp">
-
-            <EditText
-                android:id="@+id/text_input"
-                android:layout_width="0dp"
-                android:layout_height="64dp"
-                android:layout_weight="1"
-                android:hint="@string/text_input_hint"
-                android:inputType="text"
-                android:autofillHints="message"
-                android:textSize="16sp" />
-
-            <Button
-                android:id="@+id/send_text_button"
-                android:layout_width="wrap_content"
-                android:layout_height="64dp"
-                android:text="@string/send_button_text"
-                android:minWidth="88dp" />
-        </LinearLayout>
-
-        <HorizontalScrollView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:scrollbars="none">
+            android:padding="8dp"
+            android:gravity="center">
 
             <LinearLayout
-                android:layout_width="wrap_content"
+                android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="8dp">
+                android:layout_weight="0.7"
+                android:orientation="horizontal">
 
-                <Button
-                    android:id="@+id/start_listening_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="64dp"
-                    android:text="@string/start_talking_button_text"
-                    android:layout_marginEnd="8dp" />
-
-                <Spinner
-                    android:id="@+id/speaker_spinner"
-                    android:layout_width="wrap_content"
-                    android:layout_height="64dp"
-                    android:contentDescription="@string/speaker_spinner_description"
+                <EditText
+                    android:id="@+id/text_input"
+                    android:layout_width="0dp"
+                    android:layout_height="128dp"
+                    android:layout_weight="1"
+                    android:hint="@string/text_input_hint"
+                    android:inputType="text"
+                    android:autofillHints="message"
+                    android:textSize="16sp"
                     android:layout_marginEnd="8dp" />
 
                 <Button
-                    android:id="@+id/next_song_button"
+                    android:id="@+id/send_text_button"
                     android:layout_width="wrap_content"
-                    android:layout_height="64dp"
-                    android:text="@string/next_song_button_text"
-                    android:layout_marginEnd="8dp" />
-
-                <Button
-                    android:id="@+id/restart_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="64dp"
-                    android:text="@string/restart_button_text"
-                    android:layout_marginEnd="8dp" />
-
-                <Button
-                    android:id="@+id/mute_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="64dp"
-                    android:text="@string/mute_button_text" />
+                    android:layout_height="128dp"
+                    android:text="@string/send_button_text"
+                    android:minWidth="88dp" />
 
             </LinearLayout>
-        </HorizontalScrollView>
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:padding="8dp">
+
+            <Button
+                android:id="@+id/start_listening_button"
+                android:layout_width="0dp"
+                android:layout_height="128dp"
+                android:layout_weight="0.9"
+                android:text="@string/start_talking_button_text"
+                android:layout_marginEnd="4dp" />
+
+            <Spinner
+                android:id="@+id/speaker_spinner"
+                android:layout_width="0dp"
+                android:layout_height="128dp"
+                android:layout_weight="0.9"
+                android:contentDescription="@string/speaker_spinner_description"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/next_song_button"
+                android:layout_width="0dp"
+                android:layout_height="128dp"
+                android:layout_weight="0.9"
+                android:text="@string/next_song_button_text"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/restart_button"
+                android:layout_width="0dp"
+                android:layout_height="128dp"
+                android:layout_weight="0.9"
+                android:text="@string/restart_button_text"
+                android:layout_marginStart="4dp"
+                android:layout_marginEnd="4dp" />
+
+            <Button
+                android:id="@+id/mute_button"
+                android:layout_width="0dp"
+                android:layout_height="128dp"
+                android:layout_weight="0.9"
+                android:text="@string/mute_button_text"
+                android:layout_marginStart="4dp" />
+
+        </LinearLayout>
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

@@ -3,12 +3,11 @@ package com.vaios.holobar
 import ai.onnxruntime.*
 import android.content.Context
 import android.util.Log
-import java.io.File
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import kotlin.math.max
 
-class VitsOnnxSynthesizer(context: Context, modelFilePath: String) : AutoCloseable {
+class VitsOnnxSynthesizer(context: Context, modelData: ByteArray) : AutoCloseable {
     companion object {
         private const val TAG = "VitsOnnxSynthesizer"
 
@@ -23,12 +22,11 @@ class VitsOnnxSynthesizer(context: Context, modelFilePath: String) : AutoCloseab
     private val session: OrtSession
 
     init {
-        val modelBytes = File(modelFilePath).readBytes()
         val sessionOptions = OrtSession.SessionOptions().apply {
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             setIntraOpNumThreads(calculateOptimalThreads())
         }
-        session = env.createSession(modelBytes, sessionOptions)
+        session = env.createSession(modelData, sessionOptions)
     }
 
     fun tts(text: String, speakerId: Long): FloatArray {

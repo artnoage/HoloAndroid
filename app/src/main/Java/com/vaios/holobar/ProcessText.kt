@@ -6,6 +6,7 @@ import java.io.IOException
 import ai.onnxruntime.OrtException
 import kotlinx.coroutines.*
 import java.io.File
+import java.io.InputStream
 
 class ProcessText(private val context: Context, private val apiKey: String) {
     companion object {
@@ -45,23 +46,20 @@ class ProcessText(private val context: Context, private val apiKey: String) {
             Log.d(TAG, "VITS model path: $vitsModelPath")
             Log.d(TAG, "Phonemizer model path: $phonemizerModelPath")
 
-            // Check if files exist
-            val vitsModelFile = File(vitsModelPath)
-            val phonemizerModelFile = File(phonemizerModelPath)
+            // Read VITS model data
+            val vitsModelData = readAssetOrFile(vitsModelPath)
 
-            if (!vitsModelFile.exists()) {
-                throw IOException("VITS model file does not exist: $vitsModelPath")
-            }
-            if (!phonemizerModelFile.exists()) {
-                throw IOException("Phonemizer model file does not exist: $phonemizerModelPath")
-            }
-
-            // Initialize VITS synthesizer with the file path
-            synthesizer = VitsOnnxSynthesizer(context, vitsModelPath)
+            // Initialize VITS synthesizer with the model data
+            synthesizer = VitsOnnxSynthesizer(context, vitsModelData)
             Log.d(TAG, "VITS synthesizer initialized")
 
-            // Initialize Phonemizer with the file path
-            Phonemic.initialize(phonemizerModelPath)
+            // Initialize Phonemizer with the file path or input stream
+            if (phonemizerModelPath.startsWith("asset:///")) {
+                val phonemizerInputStream = context.assets.open(phonemizerModelPath.removePrefix("asset:///"))
+                Phonemic.initialize(phonemizerInputStream)
+            } else {
+                Phonemic.initialize(phonemizerModelPath)
+            }
             Log.d(TAG, "Phonemizer initialized")
 
             // Initialize ApiCall
@@ -74,6 +72,14 @@ class ProcessText(private val context: Context, private val apiKey: String) {
         } catch (e: OrtException) {
             Log.e(TAG, "Error initializing models", e)
             throw RuntimeException("Error initializing models: ${e.message}")
+        }
+    }
+
+    private fun readAssetOrFile(path: String): ByteArray {
+        return if (path.startsWith("asset:///")) {
+            context.assets.open(path.removePrefix("asset:///")).use { it.readBytes() }
+        } else {
+            File(path).readBytes()
         }
     }
 
