@@ -11,6 +11,10 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
+import android.graphics.Color
 
 class ProcessAndResponseManager(
     private val context: Context,
@@ -111,7 +115,9 @@ class ProcessAndResponseManager(
         val words = text.split(" ")
         for (word in words) {
             withContext(Dispatchers.Main) {
-                textView.append("$word ")
+                val spannable = SpannableString("$word ")
+                spannable.setSpan(ForegroundColorSpan(Color.RED), 0, spannable.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                textView.append(spannable)
                 scrollToBottom(textView)
             }
             delay(50) // Adjust delay as needed

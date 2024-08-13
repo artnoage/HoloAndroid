@@ -19,9 +19,11 @@
 
     <ScrollView
         android:id="@+id/scroll_view"
-        android:layout_width="2146dp"
-        android:layout_height="1550dp"
+        android:layout_width="2372dp"
+        android:layout_height="2224dp"
         android:layout_margin="16dp"
+        android:layout_marginTop="32dp"
+        android:layout_marginEnd="56dp"
         android:background="#E6FFFFFF"
         android:contentDescription="@string/response_area_description"
         app:layout_constraintEnd_toEndOf="parent"
