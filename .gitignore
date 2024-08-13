@@ -3,4 +3,4 @@ build/distributions/*.tar
 build/libs/*.jar
 .idea
 .gradle
-app/build
+app/buildapp/src/main/assets/my_assets/*
