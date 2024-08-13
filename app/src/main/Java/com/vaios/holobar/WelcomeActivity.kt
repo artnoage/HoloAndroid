@@ -20,6 +20,7 @@ class WelcomeActivity : AppCompatActivity() {
     private lateinit var apiKeyLinkTextView: TextView
     private lateinit var proceedButton: Button
     private lateinit var apiCall: ApiCall
+    private lateinit var assetManager: AssetManager
 
     private val coroutineScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private val TAG = "WelcomeActivity"
@@ -33,6 +34,9 @@ class WelcomeActivity : AppCompatActivity() {
 
         // Initialize ApiCall with an empty string, we'll set the actual key when validating
         apiCall = ApiCall(this, "")
+        assetManager = AssetManager(this)
+
+        checkAndDownloadAssets()
     }
 
     private fun initializeViews() {
@@ -42,8 +46,8 @@ class WelcomeActivity : AppCompatActivity() {
         statusTextView = findViewById(R.id.statusTextView)
         apiKeyLinkTextView = findViewById(R.id.apiKeyLinkTextView)
         proceedButton = findViewById<Button>(R.id.proceedButton).apply {
-            isEnabled = true
-            text = getString(R.string.proceed)
+            isEnabled = false
+            text = getString(R.string.checking_assets)
         }
     }
 
@@ -56,6 +60,37 @@ class WelcomeActivity : AppCompatActivity() {
         proceedButton.setOnClickListener {
             proceedButton.isEnabled = false
             validateApiKey()
+        }
+    }
+
+    private fun checkAndDownloadAssets() {
+        coroutineScope.launch {
+            updateStatus(getString(R.string.checking_assets))
+            try {
+                val assetsPresent = assetManager.areAssetsPresent()
+                if (assetsPresent) {
+                    updateStatus(getString(R.string.assets_already_present))
+                    proceedButton.isEnabled = true
+                    proceedButton.text = getString(R.string.proceed)
+                } else {
+                    updateStatus(getString(R.string.assets_not_found_downloading))
+                    val success = assetManager.downloadAssetPack { progress ->
+                        val percentage = (progress * 100).toInt()
+                        updateStatus(getString(R.string.downloading_assets, percentage))
+                    }
+                    if (success) {
+                        updateStatus(getString(R.string.assets_ready))
+                        proceedButton.isEnabled = true
+                        proceedButton.text = getString(R.string.proceed)
+                    } else {
+                        updateStatus(getString(R.string.asset_download_failed))
+                        proceedButton.isEnabled = false
+                    }
+                }
+            } catch (e: Exception) {
+                updateStatus(getString(R.string.asset_download_error, e.message))
+                proceedButton.isEnabled = false
+            }
         }
     }
 

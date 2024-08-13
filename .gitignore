@@ -2,5 +2,13 @@ build/distributions/*.zip
 build/distributions/*.tar
 build/libs/*.jar
 .gradle
+<<<<<<< HEAD
 app/build
 .idea
+=======
+app/buildapp/src/main/assets/my_assets/*
+app/build/
+app/src/main/assets/my_assets/
+app/src/release
+app/src/main/assets/temp_assets/
+>>>>>>> release

@@ -1,13 +1,11 @@
 package com.vaios.holobar
 
 import ai.onnxruntime.*
-import android.content.res.AssetManager
+import java.io.File
 import java.io.InputStream
-import java.io.ByteArrayOutputStream
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.math.max
-
 
 class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
     private val maxSeqLen: Int = config.getProperty("max_seq_len").toInt()
@@ -22,22 +20,23 @@ class Phonemic(config: Properties, private val tokenToIdx: Map<String, Int>) {
         private lateinit var session: OrtSession
 
         @JvmStatic
-        fun initialize(assetManager: AssetManager, modelFileName: String) {
-            env = OrtEnvironment.getEnvironment()
-            assetManager.open(modelFileName).use { modelStream ->
-                val modelBytes = readInputStream(modelStream)
-                val sessionOptions = OrtSession.SessionOptions().apply {
-                    setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
-                    setIntraOpNumThreads(calculateOptimalThreads())
-                }
-                session = env.createSession(modelBytes, sessionOptions)
-            }
+        fun initialize(modelFilePath: String) {
+            initialize(File(modelFilePath).readBytes())
         }
 
-        private fun readInputStream(inputStream: InputStream): ByteArray {
-            val buffer = ByteArrayOutputStream()
-            inputStream.copyTo(buffer)
-            return buffer.toByteArray()
+        @JvmStatic
+        fun initialize(inputStream: InputStream) {
+            initialize(inputStream.readBytes())
+        }
+
+        @JvmStatic
+        fun initialize(modelData: ByteArray) {
+            env = OrtEnvironment.getEnvironment()
+            val sessionOptions = OrtSession.SessionOptions().apply {
+                setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
+                setIntraOpNumThreads(calculateOptimalThreads())
+            }
+            session = env.createSession(modelData, sessionOptions)
         }
 
         private fun calculateOptimalThreads(): Int {

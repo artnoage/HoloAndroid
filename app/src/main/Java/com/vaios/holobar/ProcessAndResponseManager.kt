@@ -11,6 +11,10 @@ import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import android.text.Spannable
+import android.text.SpannableString
+import android.text.style.ForegroundColorSpan
+import android.graphics.Color
 
 class ProcessAndResponseManager(
     private val context: Context,
@@ -19,7 +23,7 @@ class ProcessAndResponseManager(
 ) {
     private val job = Job()
     private val scope = CoroutineScope(Dispatchers.Main + job)
-    private val audioTextChannel = Channel<Triple<String, FloatArray, TextView>>(Channel.UNLIMITED)
+    private val audioTextChannel = Channel<Triple<String, FloatArray?, TextView>>(Channel.UNLIMITED)
     private var audioTrack: AudioTrack? = null
     private var pieceCount = 0
 
@@ -33,7 +37,7 @@ class ProcessAndResponseManager(
                 for (triple in audioTextChannel) {
                     val (text, audio, textView) = triple
                     streamText(text, textView)
-                    playResponseAudio(audio)
+                    audio?.let { playResponseAudio(it) }
                     pieceCount++
                 }
             } finally {
@@ -46,12 +50,16 @@ class ProcessAndResponseManager(
         }
     }
 
-    fun process(input: Any, selectedSpeakerId: Int, responseTextView: TextView, onComplete: () -> Unit) {
+    fun process(input: Any, selectedSpeakerId: Int, responseTextView: TextView, isMuted: Boolean, onComplete: () -> Unit) {
         scope.launch {
             try {
                 val narration = getApiResponse(input, selectedSpeakerId)
                 val textPieces = processText.splitText(narration)
-                processTextPieces(textPieces, selectedSpeakerId, responseTextView)
+                if (isMuted) {
+                    processTextPiecesOnly(textPieces, responseTextView)
+                } else {
+                    processTextPieces(textPieces, selectedSpeakerId, responseTextView)
+                }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     responseTextView.text = context.getString(R.string.error_message, e.message)
@@ -90,6 +98,12 @@ class ProcessAndResponseManager(
         }
     }
 
+    private suspend fun processTextPiecesOnly(textPieces: List<String>, responseTextView: TextView) {
+        for (piece in textPieces) {
+            audioTextChannel.send(Triple(piece, null, responseTextView))
+        }
+    }
+
     private suspend fun synthesizeAudio(text: String, speakerId: Int): FloatArray =
         suspendCancellableCoroutine { continuation ->
             processText.synthesizeAudio(text, speakerId) { audioData ->
@@ -101,7 +115,9 @@ class ProcessAndResponseManager(
         val words = text.split(" ")
         for (word in words) {
             withContext(Dispatchers.Main) {
-                textView.append("$word ")
+                val spannable = SpannableString("$word ")
+                spannable.setSpan(ForegroundColorSpan(Color.RED), 0, spannable.length, Spannable.SPAN_EXCLUSIVE_EXCLUSIVE)
+                textView.append(spannable)
                 scrollToBottom(textView)
             }
             delay(50) // Adjust delay as needed
