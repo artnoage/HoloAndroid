@@ -19,15 +19,15 @@
 
     <ScrollView
         android:id="@+id/scroll_view"
-        android:layout_width="0dp"
-        android:layout_height="0dp"
+        android:layout_width="2146dp"
+        android:layout_height="1550dp"
         android:layout_margin="16dp"
-        android:background="#80FFFFFF"
+        android:background="#E6FFFFFF"
         android:contentDescription="@string/response_area_description"
-        app:layout_constraintWidth_percent="0.3"
-        app:layout_constraintHeight_percent="0.3"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="parent">
+        app:layout_constraintHeight_percent="0.3"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintWidth_percent="0.3">
 
         <LinearLayout
             android:id="@+id/response_container"
@@ -62,33 +62,34 @@
             android:layout_height="wrap_content"
             android:orientation="horizontal"
             android:padding="8dp"
-            android:gravity="center">
+            android:baselineAligned="false">
 
-            <LinearLayout
+            <FrameLayout
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
-                android:layout_weight="0.7"
-                android:orientation="horizontal">
+                android:layout_weight="1">
 
                 <EditText
                     android:id="@+id/text_input"
-                    android:layout_width="0dp"
-                    android:layout_height="128dp"
-                    android:layout_weight="1"
+                    android:layout_width="match_parent"
+                    android:layout_height="50dp"
                     android:hint="@string/text_input_hint"
                     android:inputType="text"
                     android:autofillHints="message"
                     android:textSize="16sp"
-                    android:layout_marginEnd="8dp" />
+                    android:layout_marginEnd="8dp"
+                    android:background="#E6FFFFFF"
+                    android:padding="8dp"
+                    android:textColor="#8B0000" />
+            </FrameLayout>
 
-                <Button
-                    android:id="@+id/send_text_button"
-                    android:layout_width="wrap_content"
-                    android:layout_height="128dp"
-                    android:text="@string/send_button_text"
-                    android:minWidth="88dp" />
+            <Button
+                android:id="@+id/send_text_button"
+                android:layout_width="wrap_content"
+                android:layout_height="50dp"
+                android:text="@string/send_button_text"
+                android:minWidth="88dp" />
 
-            </LinearLayout>
         </LinearLayout>
 
         <LinearLayout
@@ -100,25 +101,27 @@
             <Button
                 android:id="@+id/start_listening_button"
                 android:layout_width="0dp"
-                android:layout_height="128dp"
-                android:layout_weight="0.9"
+                android:layout_height="50dp"
+                android:layout_weight="1"
                 android:text="@string/start_talking_button_text"
                 android:layout_marginEnd="4dp" />
 
             <Spinner
                 android:id="@+id/speaker_spinner"
                 android:layout_width="0dp"
-                android:layout_height="128dp"
-                android:layout_weight="0.9"
+                android:layout_height="50dp"
+                android:layout_weight="1"
                 android:contentDescription="@string/speaker_spinner_description"
                 android:layout_marginStart="4dp"
-                android:layout_marginEnd="4dp" />
+                android:layout_marginEnd="4dp"
+                android:background="#E6FFFFFF"
+                android:popupBackground="#E6FFFFFF" />
 
             <Button
                 android:id="@+id/next_song_button"
                 android:layout_width="0dp"
-                android:layout_height="128dp"
-                android:layout_weight="0.9"
+                android:layout_height="50dp"
+                android:layout_weight="1"
                 android:text="@string/next_song_button_text"
                 android:layout_marginStart="4dp"
                 android:layout_marginEnd="4dp" />
@@ -126,8 +129,8 @@
             <Button
                 android:id="@+id/restart_button"
                 android:layout_width="0dp"
-                android:layout_height="128dp"
-                android:layout_weight="0.9"
+                android:layout_height="50dp"
+                android:layout_weight="1"
                 android:text="@string/restart_button_text"
                 android:layout_marginStart="4dp"
                 android:layout_marginEnd="4dp" />
@@ -135,8 +138,8 @@
             <Button
                 android:id="@+id/mute_button"
                 android:layout_width="0dp"
-                android:layout_height="128dp"
-                android:layout_weight="0.9"
+                android:layout_height="50dp"
+                android:layout_weight="1"
                 android:text="@string/mute_button_text"
                 android:layout_marginStart="4dp" />
 
