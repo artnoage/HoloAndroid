@@ -69,4 +69,13 @@
     <string name="activity_download_assets2">activity_download_assets: %s</string>
     <string name="mute">Mute</string>
     <string name="unmute">Unmute</string>
+    <string name="response_hint">Response will appear here</string>
+    <string name="text_input_hint">Enter text here</string>
+    <string name="send_button_text">Send</string>
+    <string name="start_talking_button_text">Start Talking</string>
+    <string name="speaker_spinner_description">Select speaker</string>
+    <string name="next_song_button_text">Next Song</string>
+    <string name="restart_button_text">Restart</string>
+    <string name="mute_button_text">Mute</string>
+    <string name="response_area_description">Response display area</string>
 </resources>

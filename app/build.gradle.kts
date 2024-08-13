@@ -12,7 +12,7 @@ android {
         applicationId = "com.vaios.holobar"
         minSdk = 28
         targetSdk = 34
-        versionCode = 5
+        versionCode = 6
         versionName = "1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
