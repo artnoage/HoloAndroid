@@ -1,5 +1,5 @@
 plugins {
-    id("com.android.application") version "8.5.1"
+    id("com.android.application") version "8.5.2"
     id("org.jetbrains.kotlin.android") version "1.9.22"
     id("de.mannodermaus.android-junit5") version "1.9.3.0"
 }
@@ -12,12 +12,15 @@ android {
         applicationId = "com.vaios.holobar"
         minSdk = 28
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 8
+        versionName = "1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["runnerBuilder"] = "de.mannodermaus.junit5.AndroidJUnit5Builder"
+        assetPacks += ":ml_models"
     }
+
+
 
     buildTypes {
         release {
@@ -40,16 +43,6 @@ android {
             it.useJUnitPlatform()
         }
     }
-
-    // Uncomment the following block if you're using Jetpack Compose
-    /*
-    buildFeatures {
-        compose = true
-    }
-    composeOptions {
-        kotlinCompilerExtensionVersion = "1.5.8"
-    }
-    */
 }
 
 dependencies {
@@ -63,6 +56,8 @@ dependencies {
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.google.code.gson:gson:2.10.1")
     implementation("androidx.core:core-ktx:1.13.1")
+    implementation("com.google.android.play:asset-delivery-ktx:2.2.2")
+
 
     // Unit testing
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.2")
@@ -82,20 +77,4 @@ dependencies {
     androidTestImplementation("io.mockk:mockk-android:1.13.10")
     androidTestImplementation("de.mannodermaus.junit5:android-test-core:1.4.0")
     androidTestRuntimeOnly("de.mannodermaus.junit5:android-test-runner:1.4.0")
-
-    // Jetpack Compose dependencies (uncomment if using Compose)
-    /*
-    val composeBom = platform("androidx.compose:compose-bom:2024.02.00")
-    implementation(composeBom)
-    androidTestImplementation(composeBom)
-
-    implementation("androidx.compose.ui:ui")
-    implementation("androidx.compose.ui:ui-graphics")
-    implementation("androidx.compose.ui:ui-tooling-preview")
-    implementation("androidx.compose.material3:material3")
-
-    androidTestImplementation("androidx.compose.ui:ui-test-junit4")
-    debugImplementation("androidx.compose.ui:ui-tooling")
-    debugImplementation("androidx.compose.ui:ui-test-manifest")
-    */
 }

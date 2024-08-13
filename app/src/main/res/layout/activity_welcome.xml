@@ -45,8 +45,8 @@
 
     <EditText
         android:id="@+id/apiKeyEditText"
-        android:layout_width="0dp"
-        android:layout_height="wrap_content"
+        android:layout_width="185dp"
+        android:layout_height="66dp"
         android:layout_marginStart="32dp"
         android:layout_marginEnd="8dp"
         android:autofillHints="password"
@@ -59,7 +59,7 @@
         app:layout_constraintEnd_toStartOf="@+id/proceedButton"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.891"
+        app:layout_constraintVertical_bias="0.885"
         app:layout_constraintWidth_default="spread" />
 
     <Button
@@ -71,7 +71,8 @@
         app:layout_constraintBottom_toBottomOf="@id/apiKeyEditText"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/apiKeyEditText"
-        app:layout_constraintTop_toTopOf="@id/apiKeyEditText" />
+        app:layout_constraintTop_toTopOf="@id/apiKeyEditText"
+        app:layout_constraintVertical_bias="1.0" />
 
     <TextView
         android:id="@+id/apiKeyLinkTextView"
@@ -81,6 +82,7 @@
         android:text="@string/get_your_api_key_here"
         android:textColor="#FFFFFF"
         app:layout_constraintEnd_toEndOf="@id/apiKeyEditText"
+        app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="@id/apiKeyEditText"
         app:layout_constraintTop_toBottomOf="@id/apiKeyEditText" />
 

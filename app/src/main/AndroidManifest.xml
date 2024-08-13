@@ -33,6 +33,8 @@
 
         <activity
             android:name=".MainActivity"
+            android:configChanges="orientation|screenSize"
+            android:windowSoftInputMode="adjustResize"
             android:exported="true">
         </activity>
     </application>

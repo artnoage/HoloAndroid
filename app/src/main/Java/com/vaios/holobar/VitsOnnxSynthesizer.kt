@@ -3,20 +3,17 @@ package com.vaios.holobar
 import ai.onnxruntime.*
 import android.content.Context
 import android.util.Log
-import java.io.ByteArrayOutputStream
 import java.nio.FloatBuffer
 import java.nio.LongBuffer
 import kotlin.math.max
 
-class VitsOnnxSynthesizer(context: Context, modelFileName: String) : AutoCloseable {
+class VitsOnnxSynthesizer(context: Context, modelData: ByteArray) : AutoCloseable {
     companion object {
         private const val TAG = "VitsOnnxSynthesizer"
 
-        // Function to calculate optimal thread count
         private fun calculateOptimalThreads(): Int {
             val availableProcessors = Runtime.getRuntime().availableProcessors()
-            // Use 75% of available cores, but at least 1 and at most 4
-            return max(1, (availableProcessors * 0.75).toInt())
+            return max(1, (availableProcessors * 0.75).toInt().coerceAtMost(4))
         }
     }
 
@@ -25,20 +22,11 @@ class VitsOnnxSynthesizer(context: Context, modelFileName: String) : AutoCloseab
     private val session: OrtSession
 
     init {
-        val modelBytes = readBytesFromAsset(context, modelFileName)
         val sessionOptions = OrtSession.SessionOptions().apply {
             setOptimizationLevel(OrtSession.SessionOptions.OptLevel.ALL_OPT)
             setIntraOpNumThreads(calculateOptimalThreads())
         }
-        session = env.createSession(modelBytes, sessionOptions)
-    }
-
-    private fun readBytesFromAsset(context: Context, fileName: String): ByteArray {
-        context.assets.open(fileName).use { inputStream ->
-            val buffer = ByteArrayOutputStream()
-            inputStream.copyTo(buffer)
-            return buffer.toByteArray()
-        }
+        session = env.createSession(modelData, sessionOptions)
     }
 
     fun tts(text: String, speakerId: Long): FloatArray {

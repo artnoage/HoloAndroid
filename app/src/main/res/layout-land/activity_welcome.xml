@@ -59,7 +59,7 @@
         app:layout_constraintEnd_toStartOf="@+id/proceedButton"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.794"
+        app:layout_constraintVertical_bias="0.78"
         app:layout_constraintWidth_default="spread" />
 
     <Button
@@ -71,7 +71,8 @@
         app:layout_constraintBottom_toBottomOf="@id/apiKeyEditText"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toEndOf="@id/apiKeyEditText"
-        app:layout_constraintTop_toTopOf="@id/apiKeyEditText" />
+        app:layout_constraintTop_toTopOf="@id/apiKeyEditText"
+        app:layout_constraintVertical_bias="0.666" />
 
     <TextView
         android:id="@+id/apiKeyLinkTextView"
