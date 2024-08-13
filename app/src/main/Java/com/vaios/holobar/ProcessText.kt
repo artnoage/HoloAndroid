@@ -5,6 +5,7 @@ import android.util.Log
 import java.io.IOException
 import ai.onnxruntime.OrtException
 import kotlinx.coroutines.*
+import java.io.File
 
 class ProcessText(private val context: Context, private val apiKey: String) {
     companion object {
@@ -25,6 +26,7 @@ class ProcessText(private val context: Context, private val apiKey: String) {
     private lateinit var synthesizer: VitsOnnxSynthesizer
     private lateinit var apiCall: ApiCall
     private val coroutineScope = CoroutineScope(Dispatchers.Default)
+    private val assetManager: AssetManager = AssetManager(context)
 
     init {
         initializeModels()
@@ -33,12 +35,33 @@ class ProcessText(private val context: Context, private val apiKey: String) {
     private fun initializeModels() {
         Log.d(TAG, "Initializing models")
         try {
-            // Initialize VITS synthesizer
-            synthesizer = VitsOnnxSynthesizer(context, VITS_MODEL_FILE)
+            val vitsModelPath = assetManager.getAssetPath(VITS_MODEL_FILE)
+            val phonemizerModelPath = assetManager.getAssetPath(PHONEMIZER_MODEL_FILE)
+
+            if (vitsModelPath == null || phonemizerModelPath == null) {
+                throw IOException("Model files not found in asset pack")
+            }
+
+            Log.d(TAG, "VITS model path: $vitsModelPath")
+            Log.d(TAG, "Phonemizer model path: $phonemizerModelPath")
+
+            // Check if files exist
+            val vitsModelFile = File(vitsModelPath)
+            val phonemizerModelFile = File(phonemizerModelPath)
+
+            if (!vitsModelFile.exists()) {
+                throw IOException("VITS model file does not exist: $vitsModelPath")
+            }
+            if (!phonemizerModelFile.exists()) {
+                throw IOException("Phonemizer model file does not exist: $phonemizerModelPath")
+            }
+
+            // Initialize VITS synthesizer with the file path
+            synthesizer = VitsOnnxSynthesizer(context, vitsModelPath)
             Log.d(TAG, "VITS synthesizer initialized")
 
-            // Initialize Phonemizer
-            Phonemic.initialize(context.assets, PHONEMIZER_MODEL_FILE)
+            // Initialize Phonemizer with the file path
+            Phonemic.initialize(phonemizerModelPath)
             Log.d(TAG, "Phonemizer initialized")
 
             // Initialize ApiCall
@@ -53,7 +76,6 @@ class ProcessText(private val context: Context, private val apiKey: String) {
             throw RuntimeException("Error initializing models: ${e.message}")
         }
     }
-
 
     fun splitText(text: String): List<String> {
         // If the text is short enough, return it as a single piece
@@ -92,6 +114,32 @@ class ProcessText(private val context: Context, private val apiKey: String) {
         }
     }
 
+    fun processTextOnly(text: String, callback: (String) -> Unit) {
+        coroutineScope.launch {
+            try {
+                // Split the text if necessary
+                val textPieces = splitText(text)
+
+                // Process each piece of text
+                for (piece in textPieces) {
+                    // Here, we're directly calling the callback with the text
+                    // Instead of synthesizing audio
+                    withContext(Dispatchers.Main) {
+                        callback(piece)
+                    }
+
+                    // Add a small delay between pieces if needed
+                    delay(100)
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error processing text", e)
+                withContext(Dispatchers.Main) {
+                    callback("Error processing text: ${e.message}")
+                }
+            }
+        }
+    }
+
     private fun mapSpeakerId(apiSpeakerId: Int): Int {
         // Map the API speaker ID to the corresponding VITS model speaker ID
         for (mapping in SPEAKER_ID_MATRIX) {
@@ -102,5 +150,4 @@ class ProcessText(private val context: Context, private val apiKey: String) {
         // If no mapping is found, return the first VITS model speaker ID
         return SPEAKER_ID_MATRIX[0][1]
     }
-
 }

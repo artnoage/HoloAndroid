@@ -42,9 +42,12 @@ class MainActivity : Activity() {
     private lateinit var restartButton: Button
     private lateinit var textInput: EditText
     private lateinit var sendTextButton: Button
+    private lateinit var muteButton: Button
 
     private lateinit var audioPlaybackManager: AudioPlaybackManager
     private lateinit var processAndResponseManager: ProcessAndResponseManager
+
+    private var isMuted = false
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -79,6 +82,7 @@ class MainActivity : Activity() {
         sendTextButton = findViewById(R.id.send_text_button)
         scrollView = findViewById(R.id.scroll_view)
         responseContainer = findViewById(R.id.response_container)
+        muteButton = findViewById(R.id.mute_button)
     }
 
     private fun loadApiKey(): String {
@@ -103,7 +107,7 @@ class MainActivity : Activity() {
         speakerSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>, view: View?, position: Int, id: Long) {
                 updateBackgroundImage(position)
-                clearResponseContainer() // Clear the response container when a new speaker is selected
+                clearResponseContainer()
             }
 
             override fun onNothingSelected(parent: AdapterView<*>) {
@@ -129,7 +133,7 @@ class MainActivity : Activity() {
 
         restartButton.setOnClickListener {
             deleteUpdatedHistory()
-            clearResponseContainer() // Clear the response container when history is deleted
+            clearResponseContainer()
         }
 
         sendTextButton.setOnClickListener {
@@ -140,6 +144,21 @@ class MainActivity : Activity() {
             } else {
                 Toast.makeText(this, getString(R.string.empty_input_message), Toast.LENGTH_SHORT).show()
             }
+        }
+
+        muteButton.setOnClickListener {
+            isMuted = !isMuted
+            updateMuteButtonUI()
+        }
+    }
+
+    private fun updateMuteButtonUI() {
+        if (isMuted) {
+            muteButton.text = getString(R.string.unmute)
+            muteButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.holo_red_light))
+        } else {
+            muteButton.text = getString(R.string.mute)
+            muteButton.setBackgroundColor(ContextCompat.getColor(this, android.R.color.darker_gray))
         }
     }
 
@@ -253,10 +272,9 @@ class MainActivity : Activity() {
 
     private fun processInput(input: Any) {
         val selectedSpeakerId = speakerSpinner.selectedItemPosition
-        val isAudio = input is ByteArray
 
-        if (isAudio) {
-            Log.d(TAG, "Processing audio. Size: ${(input as ByteArray).size} bytes")
+        if (input is ByteArray) {
+            Log.d(TAG, "Processing audio. Size: ${input.size} bytes")
         } else {
             Log.d(TAG, "Processing text: $input")
         }
@@ -265,7 +283,7 @@ class MainActivity : Activity() {
         progressBar.visibility = View.VISIBLE
 
         val responseTextView = createNewResponseTextView()
-        processAndResponseManager.process(input, selectedSpeakerId, responseTextView) {
+        processAndResponseManager.process(input, selectedSpeakerId, responseTextView, isMuted) {
             runOnUiThread {
                 enableInputs()
                 progressBar.visibility = View.GONE
@@ -303,7 +321,7 @@ class MainActivity : Activity() {
             if (historyFile.delete()) {
                 Toast.makeText(this, R.string.history_deleted_success, Toast.LENGTH_SHORT).show()
                 Log.d(TAG, "Updated history file deleted: ${historyFile.absolutePath}")
-                clearResponseContainer() // Clear the response container
+                clearResponseContainer()
             } else {
                 Toast.makeText(this, R.string.history_delete_failed, Toast.LENGTH_SHORT).show()
                 Log.e(TAG, "Failed to delete updated history file: ${historyFile.absolutePath}")
@@ -311,7 +329,7 @@ class MainActivity : Activity() {
         } else {
             Toast.makeText(this, R.string.history_file_not_exist, Toast.LENGTH_SHORT).show()
             Log.d(TAG, "Updated history file does not exist: ${historyFile.absolutePath}")
-            clearResponseContainer() // Clear the response container even if the file doesn't exist
+            clearResponseContainer()
         }
     }
 
@@ -324,6 +342,7 @@ class MainActivity : Activity() {
         speakerSpinner.isEnabled = false
         textInput.isEnabled = false
         sendTextButton.isEnabled = false
+        muteButton.isEnabled = false
     }
 
     private fun enableInputs() {
@@ -331,6 +350,7 @@ class MainActivity : Activity() {
         speakerSpinner.isEnabled = true
         textInput.isEnabled = true
         sendTextButton.isEnabled = true
+        muteButton.isEnabled = true
     }
 
     private fun checkPermission() = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED

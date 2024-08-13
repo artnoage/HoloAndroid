@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "HoloAndroid"
 include(":app")
+include(":ml_models")

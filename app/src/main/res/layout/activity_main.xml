@@ -15,137 +15,128 @@
         android:scaleType="centerCrop"
         app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintHorizontal_bias="0.0"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.0" />
+        app:layout_constraintTop_toTopOf="parent" />
 
     <ScrollView
         android:id="@+id/scroll_view"
-        android:layout_width="172dp"
-        android:layout_height="144dp"
+        android:layout_width="193dp"
+        android:layout_height="181dp"
         android:layout_margin="16dp"
-        android:background="#99FFFFFF"
+        android:background="#CCFFFFFF"
         android:contentDescription="@string/scroll_view_description"
-        app:layout_constraintBottom_toTopOf="@id/text_input"
+        app:layout_constraintBottom_toTopOf="@id/text_input_layout"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
-        app:layout_constraintVertical_bias="0.035">
+        app:layout_constraintVertical_bias="0.037">
 
-        <LinearLayout
-            android:id="@+id/response_container"
+        <TextView
+            android:id="@+id/response_text_view"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
-
-            <TextView
-                android:id="@+id/response_text_view"
-                android:layout_width="match_parent"
-                android:layout_height="match_parent"
-                android:background="@android:color/transparent"
-                android:contentDescription="@string/response_text_view_description"
-                android:fadeScrollbars="false"
-                android:gravity="top"
-                android:maxLines="100"
-                android:padding="30dp"
-                android:scrollbars="vertical"
-                android:textColor="@android:color/holo_red_light"
-                android:visibility="visible" />
-        </LinearLayout>
+            android:padding="8dp"
+            android:shadowColor="#80000000"
+            android:shadowDx="1"
+            android:shadowDy="1"
+            android:shadowRadius="2"
+            android:textColor="@android:color/black"
+            android:textSize="16sp"
+            android:textStyle="bold" />
     </ScrollView>
 
-    <EditText
-        android:id="@+id/text_input"
+    <LinearLayout
+        android:id="@+id/text_input_layout"
         android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginStart="16dp"
-        android:layout_marginEnd="8dp"
+        android:orientation="horizontal"
         android:layout_marginBottom="8dp"
-        android:autofillHints="@string/Enter_text_here"
-        android:hint="@string/Enter_text_here"
-        android:inputType="text"
-        android:minHeight="48dp"
-        android:visibility="visible"
-        android:background="#CCFFFFFF"
-        android:padding="8dp"
-        android:textColor="@android:color/black"
-        android:textColorHint="#80000000"
-        app:layout_constraintBottom_toTopOf="@+id/speaker_spinner"
-        app:layout_constraintEnd_toStartOf="@+id/send_text_button"
+        app:layout_constraintBottom_toTopOf="@id/button_layout"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintWidth_default="spread" />
+        app:layout_constraintEnd_toEndOf="parent">
 
-    <Button
-        android:id="@+id/send_text_button"
-        android:layout_width="wrap_content"
+        <EditText
+            android:id="@+id/text_input"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="8dp"
+            android:autofillHints="@string/Enter_text_here"
+            android:hint="@string/Enter_text_here"
+            android:inputType="text"
+            android:minHeight="48dp"
+            android:background="#CCFFFFFF"
+            android:padding="8dp"
+            android:textColor="@android:color/black"
+            android:textColorHint="#80000000" />
+
+        <Button
+            android:id="@+id/send_text_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="@string/Send_text" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:id="@+id/button_layout"
+        android:layout_width="0dp"
         android:layout_height="wrap_content"
-        android:layout_marginEnd="16dp"
-        android:text="@string/Send_text"
-        app:layout_constraintBottom_toBottomOf="@+id/text_input"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintTop_toTopOf="@+id/text_input" />
-
-    <Spinner
-        android:id="@+id/speaker_spinner"
-        android:layout_width="102dp"
-        android:layout_height="62dp"
-        android:layout_marginStart="16dp"
-        android:layout_marginBottom="24dp"
-        android:background="@android:drawable/btn_dropdown"
-        android:minHeight="48dp"
-        android:padding="12dp"
-        android:popupBackground="#FFFFFF"
-        android:textSize="18sp"
-        android:visibility="visible"
+        android:orientation="horizontal"
+        android:layout_marginBottom="16dp"
         app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintStart_toStartOf="parent" />
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent">
 
-    <Button
-        android:id="@+id/start_listening_button"
-        android:layout_width="78dp"
-        android:layout_height="67dp"
-        android:text="@string/start_talking"
-        app:layout_constraintBottom_toBottomOf="@+id/speaker_spinner"
-        app:layout_constraintEnd_toStartOf="@+id/next_song_button"
-        app:layout_constraintStart_toEndOf="@+id/speaker_spinner"
-        app:layout_constraintTop_toTopOf="@+id/speaker_spinner" />
+        <Spinner
+            android:id="@+id/speaker_spinner"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="8dp"
+            android:background="@android:drawable/btn_dropdown"
+            android:minHeight="48dp"
+            android:padding="8dp"
+            android:popupBackground="#FFFFFF" />
 
-    <Button
-        android:id="@+id/next_song_button"
-        android:layout_width="92dp"
-        android:layout_height="65dp"
-        android:text="@string/next_song"
-        app:layout_constraintBottom_toBottomOf="@+id/start_listening_button"
-        app:layout_constraintEnd_toStartOf="@+id/restart_button"
-        app:layout_constraintStart_toEndOf="@+id/start_listening_button"
-        app:layout_constraintTop_toTopOf="@+id/start_listening_button"
-        tools:ignore="VisualLintButtonSize" />
+        <Button
+            android:id="@+id/mute_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/mute" />
 
-    <Button
-        android:id="@+id/restart_button"
-        android:layout_width="86dp"
-        android:layout_height="64dp"
-        android:layout_marginEnd="16dp"
-        android:text="@string/restart"
-        app:layout_constraintBottom_toBottomOf="@+id/next_song_button"
-        app:layout_constraintEnd_toEndOf="parent"
-        app:layout_constraintStart_toEndOf="@+id/next_song_button"
-        app:layout_constraintTop_toTopOf="@+id/next_song_button"
-        tools:ignore="VisualLintButtonSize" />
+        <Button
+            android:id="@+id/start_listening_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/start_talking" />
+
+        <Button
+            android:id="@+id/restart_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="@string/restart" />
+
+        <Button
+            android:id="@+id/next_song_button"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginEnd="16dp"
+            android:text="@string/next_song" />
+    </LinearLayout>
 
     <ProgressBar
         android:id="@+id/progress_bar"
-        android:layout_width="0dp"
-        android:layout_height="16dp"
-        android:layout_marginTop="8dp"
-        android:layout_marginBottom="8dp"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
         android:indeterminate="true"
         android:visibility="gone"
-        app:layout_constraintBottom_toTopOf="@+id/text_input"
+        app:layout_constraintBottom_toBottomOf="parent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
-        app:layout_constraintTop_toBottomOf="@id/scroll_view" />
+        app:layout_constraintTop_toTopOf="parent" />
 
 </androidx.constraintlayout.widget.ConstraintLayout>

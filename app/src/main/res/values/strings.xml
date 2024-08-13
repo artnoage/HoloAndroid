@@ -57,4 +57,16 @@
     <string name="valid_key_found">Valid API key found. Ready to proceed.</string>
     <string name="no_valid_key_found"> No Valid API key found.</string>
     <string name="empty_input_message">Empty input messages</string>
-    </resources>
+    <string name="checking_assets">Checking and downloading necessary assets…</string>
+    <string name="assets_ready">Assets are ready</string>
+    <string name="asset_download_failed">Failed to download necessary assets. Please try again.</string>
+    <string name="asset_access_failed">Failed to access necessary assets. Please try again.</string>
+    <string name="assets_already_present">Assets are already present</string>
+    <string name="assets_not_found_downloading">Assets not found. Downloading…</string>
+    <string name="downloading_assets">Downloading assets: %d%%</string>
+    <string name="asset_download_error">Error downloading assets: %s</string>
+    <string name="activity_download_assets">activity_download_assets: %s</string>
+    <string name="activity_download_assets2">activity_download_assets: %s</string>
+    <string name="mute">Mute</string>
+    <string name="unmute">Unmute</string>
+</resources>

@@ -19,7 +19,7 @@ class ProcessAndResponseManager(
 ) {
     private val job = Job()
     private val scope = CoroutineScope(Dispatchers.Main + job)
-    private val audioTextChannel = Channel<Triple<String, FloatArray, TextView>>(Channel.UNLIMITED)
+    private val audioTextChannel = Channel<Triple<String, FloatArray?, TextView>>(Channel.UNLIMITED)
     private var audioTrack: AudioTrack? = null
     private var pieceCount = 0
 
@@ -33,7 +33,7 @@ class ProcessAndResponseManager(
                 for (triple in audioTextChannel) {
                     val (text, audio, textView) = triple
                     streamText(text, textView)
-                    playResponseAudio(audio)
+                    audio?.let { playResponseAudio(it) }
                     pieceCount++
                 }
             } finally {
@@ -46,12 +46,16 @@ class ProcessAndResponseManager(
         }
     }
 
-    fun process(input: Any, selectedSpeakerId: Int, responseTextView: TextView, onComplete: () -> Unit) {
+    fun process(input: Any, selectedSpeakerId: Int, responseTextView: TextView, isMuted: Boolean, onComplete: () -> Unit) {
         scope.launch {
             try {
                 val narration = getApiResponse(input, selectedSpeakerId)
                 val textPieces = processText.splitText(narration)
-                processTextPieces(textPieces, selectedSpeakerId, responseTextView)
+                if (isMuted) {
+                    processTextPiecesOnly(textPieces, responseTextView)
+                } else {
+                    processTextPieces(textPieces, selectedSpeakerId, responseTextView)
+                }
             } catch (e: Exception) {
                 withContext(Dispatchers.Main) {
                     responseTextView.text = context.getString(R.string.error_message, e.message)
@@ -87,6 +91,12 @@ class ProcessAndResponseManager(
         for (piece in textPieces) {
             val audioData = synthesizeAudio(piece, speakerId)
             audioTextChannel.send(Triple(piece, audioData, responseTextView))
+        }
+    }
+
+    private suspend fun processTextPiecesOnly(textPieces: List<String>, responseTextView: TextView) {
+        for (piece in textPieces) {
+            audioTextChannel.send(Triple(piece, null, responseTextView))
         }
     }
 
